@@ -1,0 +1,23 @@
+<!DOCTYPE transform_params>
+<transform_params>
+    <main id="tooltransformparams"/>
+    <data mode="0">
+        <free_transform>
+            <transformedCenter type="pointf" x="{x}" y="{y}"/>
+            <originalCenter type="pointf" x="{x}" y="{y}"/>
+            <rotationCenterOffset type="pointf" x="{x}" y="{y}"/>
+            <transformAroundRotationCenter type="value" value="1"/>
+            <aX type="value" value="0"/>
+            <aY type="value" value="0"/>
+            <aZ type="value" value="0"/>
+            <cameraPos type="vector3d" x="0" z="1024" y="0"/>
+            <scaleX type="value" value="{scale_x}"/>
+            <scaleY type="value" value="{scale_y}"/>
+            <shearX type="value" value="0"/>
+            <shearY type="value" value="0"/>
+            <keepAspectRatio type="value" value="0"/>
+            <flattenedPerspectiveTransform m21="0" type="transform" m13="0" m23="0" m11="1" m22="1" m33="1" m12="0" m31="0" m32="0"/>
+            <filterId type="value" value="Bicubic"/>
+        </free_transform>
+    </data>
+</transform_params>

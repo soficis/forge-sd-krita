@@ -1,0 +1,10 @@
+﻿Forge SD-Krita: Initializing plugin...
+Forge SD-Krita: Error importing ForgeDocker: No module named 'PyQt5'
+Traceback (most recent call last):
+  File "V:\cyanic-sd-krita\forge\__init__.py", line 7, in <module>
+    from .forge import ForgeDocker
+  File "V:\cyanic-sd-krita\forge\forge.py", line 3, in <module>
+    from PyQt5.QtWidgets import QComboBox, QScrollArea, QVBoxLayout, QWidget
+ModuleNotFoundError: No module named 'PyQt5'
+............
+12 passed in 0.10s

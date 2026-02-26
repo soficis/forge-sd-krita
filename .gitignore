@@ -1,8 +1,65 @@
+# Python Caches & Build
 **/__pycache__/
-cyanic/user_settings.json
-cyanic/test.json
-cyanic/saved.png
-cyanic/log.json
-cyanic/*_log.json
-cyanic/debug.png
-cyanic/user_settings_backup_*.json
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# Plugin Runtime & Settings (Local Only)
+forge/user_settings.json
+forge/test.json
+forge/saved.png
+forge/log.json
+forge/*_log.json
+forge/debug.png
+forge/user_settings_backup_*.json
+cyanic/  # Old legacy settings directory
+
+# Agent Artifacts & Planning Documents
+implementation_plan.md
+walkthrough.md
+task.md
+docs/implementation_plan.md
+docs/walkthrough.md
+docs/task.md
+.agents/
+.brain/
+.gemini/
+.serena/
+.rooroo/
+.roomodes
+.roo-ignore
+
+# Repository Clutter (All root .md except README)
+/*.md
+!/README.md
+
+# Document Folder Cleanliness
+docs/*.log
+docs/roadmap.md
+docs/sd_krita.md
+docs/codex_agents.md
+docs/cleancode.md
+
+# Secrets & Local Config
+.env
+.env.*
+!.env.example
+*.local
+
+# Editor & OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+desktop.ini

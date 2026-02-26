@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=forge
+X-Python-2-Compatible=false
+X-Krita-Manual=manual.html
+Name=Forge SD Plugin for Krita
+Comment=Forge SD-Krita Plugin - Premium Minimal UI
