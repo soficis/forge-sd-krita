@@ -1,6 +1,4 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import QImage
-from PyQt5.QtCore import QBuffer, QIODevice, QByteArray
+from ..qt_compat import *
 import json
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
@@ -122,9 +120,9 @@ class UpscalePage(QWidget):
         }
         # self.debug_text.setPlainText(json.dumps(data))
         # self.debug_text.setPlainText('%s' % type(data))
-        # self.kc.run_as_thread(lambda: self.threadable_run(data), lambda: self.threadable_return())
-        self.results = self.api.extra(data)
-        self.threadable_return()
+        self.upscale_btn.setText('Upscaling...')
+        self.upscale_btn.setDisabled(True)
+        self.kc.run_as_thread(lambda: self.threadable_run(data), lambda: self.threadable_return())
 
 
     def threadable_run(self, data):

@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import *
+from ..qt_compat import *
 
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
@@ -41,7 +41,7 @@ class BatchWidget(QWidget):
     def save_settings(self):
         self.settings_controller.set('batch.count', self.variables['batch_count'])
         self.settings_controller.set('batch.size', self.variables['batch_size'])
-        self.settings_controller.save()
+        self.settings_controller.debounced_save()
 
     def get_generation_data(self):
         data = {

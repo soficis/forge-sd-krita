@@ -1,25 +1,29 @@
 from __future__ import annotations
 
 import base64
+import logging
 import os
 import random
 
 from krita import Krita, QUuid, Selection
-from PyQt5.QtCore import (
+
+logger = logging.getLogger(__name__)
+from ..qt_compat import (
     QByteArray,
     QBuffer,
     QIODevice,
     QObject,
     QPointF,
     QThread,
-    QTimer,
+    Qt,
     pyqtSignal,
 )
-from PyQt5.QtGui import QImage, qAlpha, qRgb
+from ..qt_compat import QImage, qAlpha, qRgb
 
 
 class _Worker(QObject):
     finished = pyqtSignal()
+    error = pyqtSignal(object)
 
     def __init__(self, task):
         super().__init__()
@@ -28,6 +32,8 @@ class _Worker(QObject):
     def run(self) -> None:
         try:
             self._task()
+        except Exception as e:
+            self.error.emit(e)
         finally:
             self.finished.emit()
 
@@ -42,14 +48,21 @@ class KritaAdapter:
     def version_gte(self, target_version: str) -> bool:
         current_parts = Krita.instance().version().split(".")
         target_parts = target_version.split(".")
+        max_len = max(len(current_parts), len(target_parts))
 
-        for index, target_part in enumerate(target_parts):
-            current_part = current_parts[index]
-            if int(target_part) > int(current_part):
+        for i in range(max_len):
+            current_val = int(current_parts[i]) if i < len(current_parts) else 0
+            target_val = int(target_parts[i]) if i < len(target_parts) else 0
+            if current_val > target_val:
+                return True
+            if current_val < target_val:
                 return False
         return True
 
     def run_as_thread(self, function, after_function) -> None:
+        if hasattr(self, 'thread') and self.thread is not None and self.thread.isRunning():
+            logger.warning("run_as_thread called while a thread is already running — ignoring")
+            return
         self.thread = QThread()
         self.worker = _Worker(function)
         self.worker.moveToThread(self.thread)
@@ -213,7 +226,6 @@ class KritaAdapter:
         w: int = -1,
         h: int = -1,
     ) -> None:
-        delay_ms = 500
         document = self._ensure_document()
 
         previous_active = document.activeNode()
@@ -224,19 +236,14 @@ class KritaAdapter:
         self.results_to_layers(results, x, y, w, h, unique_name, below_active=True)
 
         transparency_layer = document.nodeByName(unique_name)
-        QTimer.singleShot(delay_ms, lambda: document.setActiveNode(transparency_layer))
-        document.refreshProjection()
+        document.setActiveNode(transparency_layer)
         document.waitForDone()
-        QTimer.singleShot(
-            delay_ms,
-            lambda: Krita.instance().action("convert_to_transparency_mask").trigger(),
-        )
+
+        Krita.instance().action("convert_to_transparency_mask").trigger()
+        document.waitForDone()
 
         if parent_node.type() == "grouplayer" and not was_group:
-            QTimer.singleShot(
-                delay_ms,
-                lambda: previous_active.addChildNode(document.activeNode(), None),
-            )
+            previous_active.addChildNode(document.activeNode(), None)
 
     def get_active_layer_uuid(self):
         document = self._ensure_document()
@@ -405,7 +412,11 @@ class KritaAdapter:
     ) -> None:
         document = self._ensure_document()
         byte_array, img_w, img_h = self.base64_to_pixeldata(base64str, w, h)
+        self._apply_preview_pixels(document, byte_array, img_w, img_h, x, y)
 
+    def _apply_preview_pixels(
+        self, document, byte_array, img_w: int, img_h: int, x: int, y: int
+    ) -> None:
         if self.preview_layer_uid is None:
             layer = document.createNode("Preview", "paintLayer")
             document.rootNode().addChildNode(layer, None)
@@ -417,6 +428,42 @@ class KritaAdapter:
         layer.setPixelData(byte_array, x, y, img_w, img_h)
         layer.setLocked(True)
         document.refreshProjection()
+
+    _PREVIEW_MAX_DIM = 512
+
+    def update_preview_from_progress(
+        self, base64str: str, x: int, y: int, target_w: int, target_h: int
+    ) -> None:
+        """Decode progress image, scale down for performance, then apply to preview layer.
+
+        The raw progress image can be large; scaling it before writing to Krita's
+        pixel buffer keeps the UI responsive during generation.
+        """
+        image_data = base64.b64decode(base64str)
+        image_format = "PNG" if base64str.startswith("iVBORw0KGgo") else "JPEG"
+        image = QImage.fromData(image_data, image_format)
+        if image.isNull():
+            return
+
+        if image.isGrayscale():
+            image = image.convertToFormat(QImage.Format_RGBA8888)
+
+        max_dim = max(image.width(), image.height())
+        if max_dim > self._PREVIEW_MAX_DIM:
+            scale = self._PREVIEW_MAX_DIM / max_dim
+            new_w = max(1, int(image.width() * scale))
+            new_h = max(1, int(image.height() * scale))
+            image = image.scaled(
+                new_w, new_h, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+
+        document = self._ensure_document()
+        image_bits = image.bits()
+        if image_bits is None:
+            return
+        image_bits.setsize(image.byteCount())
+        byte_array = QByteArray(image_bits.asstring())
+        self._apply_preview_pixels(document, byte_array, image.width(), image.height(), x, y)
 
     @staticmethod
     def get_foreground_color_hex() -> str:
@@ -438,7 +485,90 @@ class KritaAdapter:
         document.refreshProjection()
 
     def activate_brush(self) -> None:
-        Krita.instance().action("KritaShapeDrawingToolBrush").trigger()
+        action = Krita.instance().action("KritaShape/KisToolBrush")
+        if action is not None:
+            action.trigger()
+
+    def get_mask_opacity(self, layer=None) -> float:
+        """Return opacity of the given layer (0.0–1.0). Uses active node if None."""
+        document = self._ensure_document()
+        node = layer if layer is not None else document.activeNode()
+        return node.opacity()
+
+    def set_mask_opacity(self, opacity: float, layer=None) -> None:
+        """Set opacity on the given layer (0.0–1.0). Uses active node if None."""
+        document = self._ensure_document()
+        node = layer if layer is not None else document.activeNode()
+        node.setOpacity(opacity)
+        document.refreshProjection()
+
+    def clear_mask_layer(self, layer=None) -> None:
+        """Clear the layer to fully transparent. Uses active node if None."""
+        document = self._ensure_document()
+        node = layer if layer is not None else document.activeNode()
+        node.clear()
+        document.refreshProjection()
+
+    def fill_mask_layer(self, layer=None) -> None:
+        """Fill the layer with fully opaque white pixels. Uses active node if None."""
+        document = self._ensure_document()
+        node = layer if layer is not None else document.activeNode()
+        bounds = node.bounds()
+        x, y = bounds.x(), bounds.y()
+        w, h = bounds.width(), bounds.height()
+        if w > 0 and h > 0:
+            # Format_ARGB32 stores pixels as BGRA bytes; all-0xFF = opaque white
+            pixel_data = QByteArray(bytes([255, 255, 255, 255] * (w * h)))
+            node.setPixelData(pixel_data, x, y, w, h)
+        document.refreshProjection()
+
+    def get_active_brush_size(self) -> int:
+        """Try to read the current brush size; returns 0 if unavailable."""
+        try:
+            view = Krita.instance().activeWindow().activeView()
+            canvas = view.canvas()
+            size = canvas.brushSize()
+            return int(max(size.width(), size.height()))
+        except Exception:
+            return 0
+
+    def get_paintable_layer_names(self) -> list[str]:
+        """Return names of all paintable (non-group) layers."""
+        document = self._ensure_document()
+        names: list[str] = []
+
+        def _collect(node):
+            if node.type() == "paintLayer":
+                names.append(node.name())
+            for child in node.childNodes():
+                _collect(child)
+
+        _collect(document.rootNode())
+        return names
+
+    def get_layer_by_name(self, name: str):
+        """Find a node by name in the document tree. Returns None if not found."""
+        document = self._ensure_document()
+
+        def _find(node):
+            if node.name() == name:
+                return node
+            for child in node.childNodes():
+                result = _find(child)
+                if result is not None:
+                    return result
+            return None
+
+        return _find(document.rootNode())
+
+    def get_layer_projection_image(self, node) -> QImage:
+        """Get the rendered projection image for a specific layer node."""
+        bounds = node.bounds()
+        x, y, w, h = bounds.x(), bounds.y(), bounds.width(), bounds.height()
+        if w <= 0 or h <= 0:
+            return QImage()
+        pixels = node.projectionPixelData(x, y, w, h)
+        return self.projection_to_qimage(pixels, w, h)
 
     def _ensure_document(self):
         self.doc = Krita.instance().activeDocument()

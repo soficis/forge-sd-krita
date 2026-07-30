@@ -1,5 +1,4 @@
-from PyQt5.QtWidgets import *
-from PyQt5 import QtCore, QtGui
+from ..qt_compat import *
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..adapters.krita_adapter import KritaAdapter

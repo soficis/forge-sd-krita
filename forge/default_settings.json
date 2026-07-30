@@ -1,7 +1,8 @@
 {
     "server": {
         "host": "http://127.0.0.1:7860",
-        "save_imgs": false
+        "save_imgs": false,
+        "recent_hosts": []
     },
     "defaults": {
         "sampler": "",
@@ -73,7 +74,9 @@
         "padding": 32,
         "auto_update_mask": true,
         "results_below_mask": true,
-        "hide_mask_on_gen": true
+        "hide_mask_on_gen": true,
+        "auto_select_best": false,
+        "reference_layer": ""
     },
     "soft_inpaint": {
         "enabled": false,

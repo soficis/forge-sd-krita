@@ -3,8 +3,12 @@ from __future__ import annotations
 import copy
 import json
 import os
+import threading
+import time
 from pathlib import Path
 from typing import Any
+
+_SCHEMA_VERSION = 1
 
 
 class SettingsController:
@@ -21,6 +25,8 @@ class SettingsController:
         self._default_settings_file = plugin_dir / "default_settings.json"
         self._default_settings: dict[str, Any] = {}
         self.settings: dict[str, Any] = {}
+        self._save_timer: threading.Timer | None = None
+        self._save_delay: float = 0.3  # 300ms debounce
         self.load()
 
     def load(self) -> None:
@@ -29,25 +35,64 @@ class SettingsController:
         merged_settings = copy.deepcopy(self._default_settings)
         if self._user_settings_file.is_file():
             user_settings = self._read_json_or_empty(self._user_settings_file)
+
+            old_version = user_settings.pop("_schema_version", 0)
+            if old_version < _SCHEMA_VERSION:
+                user_settings = self._migrate(user_settings, old_version)
+
             merged_settings = _deep_merge_with_schema(
                 defaults=merged_settings,
                 user_values=user_settings,
             )
 
         self.settings = merged_settings
+        self.settings["_schema_version"] = _SCHEMA_VERSION
 
     def save(self) -> None:
+        """Persist settings immediately."""
+        if self._save_timer is not None:
+            self._save_timer.cancel()
+            self._save_timer = None
         self._write_json(self._user_settings_file, self.settings)
+
+    def debounced_save(self) -> None:
+        """Persist settings after a short delay, coalescing rapid calls.
+
+        Multiple calls within 300ms are merged into a single disk write.
+        Use this from slider handlers or other high-frequency callbacks.
+        """
+        if self._save_timer is not None:
+            self._save_timer.cancel()
+        self._save_timer = threading.Timer(self._save_delay, self._write_json,
+                                          args=(self._user_settings_file, self.settings))
+        self._save_timer.daemon = True
+        self._save_timer.start()
 
     def restore_defaults(self) -> None:
         self.settings = copy.deepcopy(self._default_settings)
         self.save()
 
-    def get(self, path: str) -> Any:
-        node: Any = self.settings
-        for key in _split_path(path):
-            node = node[key]
-        return node
+    def _migrate(self, settings: dict[str, Any], from_version: int) -> dict[str, Any]:
+        """Apply migrations from *from_version* up to the current schema version."""
+        migrated = settings.copy()
+
+        # if from_version < 2:
+        #     if "old_key" in migrated:
+        #         migrated["new_key"] = migrated.pop("old_key")
+
+        migrated["_schema_version"] = _SCHEMA_VERSION
+        return migrated
+
+    def get(self, path: str, default: Any = None) -> Any:
+        try:
+            node: Any = self.settings
+            for key in _split_path(path):
+                node = node[key]
+            return node
+        except (KeyError, TypeError):
+            if default is not None:
+                return default
+            raise
 
     def set(self, path: str, value: Any) -> None:
         parent, leaf_key = self._resolve_parent(path)

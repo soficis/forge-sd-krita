@@ -1,7 +1,7 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from ..qt_compat import *
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
+from ..domain.model_registry import ModelFamily, detect_model_family, get_model_config
 
 # Select model, VAE, sampler, steps for generation
 # Yes, a better name would've been nice. No, I couldn't think of one
@@ -27,8 +27,11 @@ class ModelsWidget(QWidget):
         self.refiners = []
         self.samplers = []
         self.model_changed_signals = []
+        self.architecture_changed_signals = []
+        self.architecture = ModelFamily.SD  # default architecture
 
         self.init_variables()
+        self.architecture = self.detect_architecture(self.variables['model'])
         self.draw_ui()
     
     def init_variables(self):
@@ -128,9 +131,9 @@ class ModelsWidget(QWidget):
         refiner_start = QWidget()
         refiner_start.setLayout(QHBoxLayout())
         refiner_start.layout().setContentsMargins(0,0,0,0)
-        self.refiner_start_slider = QSlider(Qt.Horizontal)
+        self.refiner_start_slider = QSlider(Qt.Orientation.Horizontal)
         self.refiner_start_slider.setTickInterval(10)
-        self.refiner_start_slider.setTickPosition(QSlider.TicksAbove)
+        self.refiner_start_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
         self.refiner_start_slider.setMinimum(0)
         self.refiner_start_slider.setMaximum(100)
         self.refiner_start_slider.setValue(int(self.variables['refiner_start'] * 100))
@@ -196,19 +199,32 @@ class ModelsWidget(QWidget):
         if key == 'model':
             for signal in self.model_changed_signals:
                 signal(value)
+            new_arch = self.detect_architecture(value)
+            if new_arch != self.architecture:
+                self.architecture = new_arch
+                for signal in self.architecture_changed_signals:
+                    signal(self.architecture)
 
     def register_model_changed_signal(self, signal):
         self.model_changed_signals.append(signal)
 
+    def register_architecture_changed_signal(self, signal):
+        self.architecture_changed_signals.append(signal)
+
+    def detect_architecture(self, model_name):
+        """Detect model architecture from model name using centralized registry.
+        Returns ModelFamily enum value.
+        """
+        return detect_model_family(model_name)
+
     def set_generation_data(self, data: dict) -> None:
-        if "sd_model_checkpoint" in data:
-            model_name = data["sd_model_checkpoint"]
-            index = self.model_list.findText(model_name)
+        # History saves widget-level keys; API uses different names
+        model_name = data.get("model") or data.get("sd_model_checkpoint")
+        if model_name and isinstance(model_name, str):
+            index = self.model_box.findText(model_name)
             if index >= 0:
-                self.model_list.setCurrentIndex(index)
-                self.update_variables()
-        # Trigger immediately for current value
-        signal(self.variables['model'])
+                self.model_box.setCurrentIndex(index)
+                self._update_variables('model', model_name)
 
     def save_settings(self):
         self.settings_controller.set('defaults.model', self.variables['model'])

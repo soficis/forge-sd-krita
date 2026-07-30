@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtGui import QIcon, QImage, QPixmap
-from PyQt5.QtWidgets import (
+from ..qt_compat import QSize, Qt
+from ..qt_compat import QIcon, QImage, QPixmap
+from ..qt_compat import (
     QCheckBox,
     QHBoxLayout,
     QListView,
@@ -48,10 +48,10 @@ class ImageInWidget(QWidget):
         self.preview_list = QListWidget()
         self.preview_list.setFixedHeight(self.MAX_HEIGHT)
         self.preview_list.setFlow(QListView.Flow.LeftToRight)
-        self.preview_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.preview_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.preview_list.setResizeMode(QListView.ResizeMode.Adjust)
-        self.preview_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.preview_list.setViewMode(QListWidget.IconMode)
+        self.preview_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.preview_list.setViewMode(QListWidget.ViewMode.IconMode)
         self.preview_list.setIconSize(QSize(self.MAX_HEIGHT, self.MAX_HEIGHT))
         self.clear_previews()
         self.layout().addWidget(self.preview_list)

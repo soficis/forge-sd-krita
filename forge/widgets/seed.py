@@ -1,6 +1,4 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import QIntValidator
-from PyQt5.QtCore import Qt
+from ..qt_compat import *
 from ..widgets import CollapsibleWidget
 from ..adapters.krita_adapter import KritaAdapter
 from ..settings_controller import SettingsController
@@ -61,9 +59,9 @@ class SeedWidget(QWidget):
         row_2.layout().addWidget(self.subseed_edit)
 
         # Variation Strength
-        self.subseed_strength_slider = QSlider(Qt.Horizontal)
+        self.subseed_strength_slider = QSlider(Qt.Orientation.Horizontal)
         self.subseed_strength_slider.setTickInterval(10)
-        self.subseed_strength_slider.setTickPosition(QSlider.TicksAbove)
+        self.subseed_strength_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
         self.subseed_strength_slider.setMinimum(0)
         self.subseed_strength_slider.setMaximum(100)
         self.subseed_strength_slider.setValue(int(self.variables['subseed_strength'] * 100))

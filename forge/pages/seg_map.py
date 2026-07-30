@@ -1,6 +1,4 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtCore import Qt
+from ..qt_compat import *
 from ..settings_controller import SettingsController
 from ..adapters.krita_adapter import KritaAdapter
 import json
@@ -27,7 +25,7 @@ class SegmentationMapPage(QWidget):
             with open(self.map_path, 'r') as file_in:
                 self.seg_map = json.loads(file_in.read())
         except Exception as e:
-            raise Exception('Forge SD - Error loading segmap: %s' % e)
+            raise Exception('Forge SD - Error loading segmap: %s' % e) from e
 
     def draw_ui(self):
         description = QLabel("ControlNet's Segmentation Map uses different colors to represent different types of objects. Here's an easy way to access those colors.")
@@ -64,6 +62,6 @@ class SegmentationMapPage(QWidget):
         try:
             self.foreground = self.kc.get_foreground_color_hex()
             self.background = self.kc.get_background_color_hex()
-        except:
+        except Exception:
             self.foreground = "#000000"
             self.background = "#ffffff"

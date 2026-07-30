@@ -1,4 +1,8 @@
-# Python Caches & Build
+# ==============================================================================
+# Git Ignore Configuration — Forge SD-Krita Plugin
+# ==============================================================================
+
+# Python Caches & Build Artifacts
 **/__pycache__/
 *.pyc
 *.pyo
@@ -7,13 +11,24 @@
 .ruff_cache/
 .tox/
 .coverage
-.cache
+.cache/
+dist/
+build/
+*.egg-info/
 nosetests.xml
 coverage.xml
 *.cover
-*.log
 
-# Plugin Runtime & Settings (Local Only)
+# Log Files, Test Outputs & Scratch Scripts
+*.log
+pytest_output.txt
+syntax_check.py
+*.tmp
+
+# Documentation Folder (All documentation consolidated into README.md)
+docs/
+
+# Plugin Local Runtime & Settings (Local Desktop Only)
 forge/user_settings.json
 forge/test.json
 forge/saved.png
@@ -21,45 +36,33 @@ forge/log.json
 forge/*_log.json
 forge/debug.png
 forge/user_settings_backup_*.json
-cyanic/  # Old legacy settings directory
+cyanic/
 
-# Agent Artifacts & Planning Documents
-implementation_plan.md
-walkthrough.md
-task.md
-docs/implementation_plan.md
-docs/walkthrough.md
-docs/task.md
-.agents/
-.brain/
-.gemini/
+# IDE Caches, Agent Private Directories & Session Documents
+.codegraph/
+.omo/
 .serena/
 .rooroo/
 .roomodes
 .roo-ignore
+.agents/
+.brain/
+.gemini/
+implementation_plan.md
+walkthrough.md
+task.md
 
-# Repository Clutter (All root .md except README)
-/*.md
-!/README.md
-
-# Document Folder Cleanliness
-docs/*.log
-docs/roadmap.md
-docs/sd_krita.md
-docs/codex_agents.md
-docs/cleancode.md
-
-# Secrets & Local Config
+# Secrets & Environment Configurations
 .env
 .env.*
 !.env.example
 *.local
 
-# Editor & OS Files
+# Editor & OS System Files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+desktop.ini
 *.swp
 *~
-desktop.ini

@@ -1,5 +1,4 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from ..qt_compat import *
 from ..adapters.sd_api import SDAPI
 from ..adapters.krita_adapter import KritaAdapter
 from ..settings_controller import SettingsController
@@ -138,9 +137,9 @@ class HiResFixWidget(QWidget):
         self.denoise_percent = QLabel('%s%%' % int(default_noise * 100))
 
         # Denoise Strength
-        self.denoise_slider = QSlider(Qt.Horizontal)
+        self.denoise_slider = QSlider(Qt.Orientation.Horizontal)
         self.denoise_slider.setTickInterval(10)
-        self.denoise_slider.setTickPosition(QSlider.TicksAbove)
+        self.denoise_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
         self.denoise_slider.setMinimum(0)
         self.denoise_slider.setMaximum(100)
         self.denoise_slider.setValue(int(default_noise * 100))
@@ -170,7 +169,7 @@ class HiResFixWidget(QWidget):
         self.settings_controller.set('hr_fix.auto_hrfix', self.variables['auto_enable_hr'])
         self.settings_controller.set('hr_fix.auto_hrfix_min', self.variables['auto_enable_min'])
         self.settings_controller.set('hr_fix.denoise_strength', self.variables['denoising_strength'])
-        self.settings_controller.save()
+        self.settings_controller.debounced_save()
 
     def get_generation_data(self):
         # Resize x and resize y should be canvas/selection size

@@ -1,6 +1,5 @@
 
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from ..qt_compat import *
 from ..settings_controller import SettingsController
 
 class ColorCorrectionWidget(QWidget):

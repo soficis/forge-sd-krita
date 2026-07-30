@@ -1,7 +1,6 @@
 # A remake of simonxeko's collapseable widget CollapseButton.h 
 # https://stackoverflow.com/questions/32476006/how-to-make-an-expandable-collapsable-section-widget-in-qt
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
+from ..qt_compat import *
 
 class CollapsibleWidget(QWidget):
     def __init__(self, text="Toggle", child:QWidget=None):

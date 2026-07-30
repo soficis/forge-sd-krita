@@ -1,9 +1,9 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+import json
+from ..qt_compat import *
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..widgets import CollapsibleWidget
+from ..domain.model_registry import ModelFamily, detect_model_family
 
 class PromptWidget(QWidget):
     NUM_LINES = 4
@@ -68,7 +68,7 @@ class PromptWidget(QWidget):
         for name in style_names:
             item = QListWidgetItem(name, self.style_name_list)
             item.setBackground( QColor('#222222') )
-            item.setCheckState(Qt.Unchecked)
+            item.setCheckState(Qt.CheckState.Unchecked)
         style_form.layout().addWidget(self.style_name_list)
         
         add_to_prompt = QPushButton()
@@ -115,7 +115,7 @@ class PromptWidget(QWidget):
     def get_selected_style_names(self):
         items = []
         for index in range(self.style_name_list.count()):
-            if self.style_name_list.item(index).checkState() == Qt.Checked:
+            if self.style_name_list.item(index).checkState() == Qt.CheckState.Checked:
                 items.append(self.style_name_list.item(index).text())
         return items
 
@@ -134,7 +134,7 @@ class PromptWidget(QWidget):
         self.negative_prompt_text_edit.setPlainText(final_negative_prompt)
         # Clear the selected prompts
         for index in range(self.style_name_list.count()):
-            self.style_name_list.item(index).setCheckState(Qt.Unchecked)
+            self.style_name_list.item(index).setCheckState(Qt.CheckState.Unchecked)
 
 
     def load_prompt(self):
@@ -151,8 +151,8 @@ class PromptWidget(QWidget):
                 self.prompt_text_edit.setPlainText(self.settings_controller.get('prompts.%s_prompt' % self.mode))
                 self.negative_prompt_text_edit.setPlainText(self.settings_controller.get('prompts.%s_negative_prompt' % self.mode))
             self.update()
-        except:
-            # Honestly don't care what the issue was, the result is empty prompt fields - which is the desired default
+        except (FileNotFoundError, json.JSONDecodeError):
+            # Result is empty prompt fields - which is the desired default
             pass
 
     def set_generation_data(self, data: dict) -> None:
@@ -164,7 +164,7 @@ class PromptWidget(QWidget):
             styles = data["styles"]
             for index in range(self.style_name_list.count()):
                 item = self.style_name_list.item(index)
-                item.setCheckState(Qt.Checked if item.text() in styles else Qt.Unchecked)
+                item.setCheckState(Qt.CheckState.Checked if item.text() in styles else Qt.CheckState.Unchecked)
 
     def save_prompt(self):
         if self.settings_controller.has('prompts.save_prompts') and not self.settings_controller.get('prompts.save_prompts'):
@@ -184,10 +184,23 @@ class PromptWidget(QWidget):
         self.settings_controller.save()
 
     def update_for_model(self, model_name):
-        is_flux = 'flux' in model_name.lower() or 'nunchaku' in model_name.lower()
-        self.negative_prompt_text_edit.setVisible(not is_flux)
+        """Hide/show prompt UI elements based on model type."""
+        family = detect_model_family(model_name)
+        name_lower = model_name.lower()
+
+        hide_neg = family in (
+            ModelFamily.FLUX,
+            ModelFamily.FLUX2,
+            ModelFamily.ZIMAGE,
+        )
+        if not hide_neg and family == ModelFamily.KREA2 and 'turbo' in name_lower:
+            hide_neg = True
+
+        self.negative_prompt_text_edit.setVisible(not hide_neg)
+
         if hasattr(self, 'style_collapsible'):
-            self.style_collapsible.setVisible(not is_flux)
-        elif not self.settings_controller.get('hide_ui.styles'):
-            # If we don't have style_collapsible yet, it might be because of how draw_ui is structured
-            pass
+            hide_styles = family in (
+                ModelFamily.FLUX,
+                ModelFamily.FLUX2,
+            )
+            self.style_collapsible.setVisible(not hide_styles)

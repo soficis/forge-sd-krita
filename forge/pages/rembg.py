@@ -1,5 +1,4 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from ..qt_compat import *
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..adapters.krita_adapter import KritaAdapter
@@ -101,7 +100,7 @@ class RemBGPage(QWidget):
 
         init_value = self.settings_controller.get(settings_key)
 
-        slider = QSlider(Qt.Horizontal)
+        slider = QSlider(Qt.Orientation.Horizontal)
         slider.setMaximum(max)
         slider.setMinimum(min)
         slider.setValue(init_value)
@@ -149,12 +148,16 @@ class RemBGPage(QWidget):
     
     def run_rembg(self):
         data = self.get_generation_data()
-        # TODO: Make this async
-        results = self.api.post('/rembg', data)
-        if results is not None:
+        self.kc.run_as_thread(lambda: self.threadable_run(data), lambda: self.threadable_return())
+
+    def threadable_run(self, data):
+        self.results = self.api.post('/rembg', data)
+
+    def threadable_return(self):
+        if self.results is not None:
             apply_mask = self.settings_controller.get('rembg.apply_mask')
             as_mask = self.settings_controller.get('rembg.results_as_mask')
             if (as_mask and not apply_mask) or not as_mask:
-                self.kc.results_to_layers(results, self.size_dict['x'], self.size_dict['y'], self.size_dict['w'], self.size_dict['h'])
+                self.kc.results_to_layers(self.results, self.size_dict['x'], self.size_dict['y'], self.size_dict['w'], self.size_dict['h'])
             else:
-                self.kc.result_to_transparency_mask(results, self.size_dict['x'], self.size_dict['y'], self.size_dict['w'], self.size_dict['h'])
+                self.kc.result_to_transparency_mask(self.results, self.size_dict['x'], self.size_dict['y'], self.size_dict['w'], self.size_dict['h'])

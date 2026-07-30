@@ -1,5 +1,4 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from ..qt_compat import *
 from ..settings_controller import SettingsController
 from . import CollapsibleWidget
 
@@ -81,7 +80,7 @@ class SoftInpaintWidget(QWidget):
         # Pull constants from variable_parameters
         label = QLabel('%s' % self.variables[variable_name])
 
-        slider = QSlider(Qt.Horizontal)
+        slider = QSlider(Qt.Orientation.Horizontal)
         # Slider works on ints
         multiplier = 10
         if self.variable_parameters[variable_name]['step_size'] < 0.1:

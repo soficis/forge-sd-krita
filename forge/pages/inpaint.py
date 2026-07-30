@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import *
-from PyQt5 import QtCore, QtGui
+from ..qt_compat import *
 from ..adapters.sd_api import SDAPI
+from ..domain.model_registry import ModelFamily, get_model_config
 from ..settings_controller import SettingsController
 from ..adapters.krita_adapter import KritaAdapter
 from ..widgets import *
@@ -40,9 +40,18 @@ class InpaintPage(QWidget):
         if not self.settings_controller.get('hide_ui.batch'):
             self.layout().addWidget(self.batch_widget)
 
+        self.auto_select_best = QCheckBox("Auto-select best")
+        self.auto_select_best.setToolTip("Automatically select the sharpest result from batch generations.")
+        self.auto_select_best.setChecked(self.settings_controller.get("inpaint.auto_select_best"))
+        self.auto_select_best.toggled.connect(
+            lambda: self.settings_controller.set("inpaint.auto_select_best", self.auto_select_best.isChecked())
+        )
+        self.layout().addWidget(self.auto_select_best)
+
         self.cfg_widget = CFGWidget(self.settings_controller, self.api)
         self.model_widget.register_model_changed_signal(self.prompt_widget.update_for_model)
         self.model_widget.register_model_changed_signal(self.cfg_widget.update_for_model)
+        self.model_widget.register_architecture_changed_signal(self._on_architecture_changed)
 
         if not self.settings_controller.get('hide_ui.cfg'):
             self.layout().addWidget(self.cfg_widget)
@@ -76,6 +85,12 @@ class InpaintPage(QWidget):
         for widget in self.widgets:
             if hasattr(widget, "set_generation_data"):
                 widget.set_generation_data(data)
+
+    def _on_architecture_changed(self, family: ModelFamily) -> None:
+        config = get_model_config(family)
+        self.settings_controller.set("defaults.min_size", config.default_min_size)
+        self.settings_controller.set("defaults.max_size", config.default_max_size)
+        self.settings_controller.debounced_save()
 
     def update(self):
         super().update()

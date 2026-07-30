@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import *
+from ..qt_compat import *
 from krita import QTimer
 import json
 from ..adapters.sd_api import SDAPI
@@ -78,26 +78,20 @@ class InterrogateWidget(QWidget):
             self.debug_data.setPlainText("%s" % json.dumps(data))
             # return
 
+        self.interrogate_btn.setText("Interrogating...")
+        self.interrogate_btn.setDisabled(True)
+        self.kc.run_as_thread(lambda: self.threadable_run(data), lambda: self.threadable_return())
+
+    def threadable_run(self, data):
         processing_instructions = {}
 
-        try:
-            self.kc.refresh_doc()
-            if self.kc.doc is None:
-                self.kc.create_new_doc()
+        self.kc.refresh_doc()
+        if self.kc.doc is None:
+            self.kc.create_new_doc()
 
-            self.results = self.api.interrogate(data)
+        self.results = self.api.interrogate(data)
 
-        except Exception as e:
-            self.interrogate_btn.setText(
-                "Interrogate"
-            )  # Want the UI to look right, even if we have an exception
-            self.update()
-            self.is_interrogating = False
-            raise Exception(
-                "Forge SD - Error getting %s: %s"
-                % (self.interrogate_model_widget.get_model(), e)
-            )
-
+    def threadable_return(self):
         if self.results is not None:
             self.finished = True
 
@@ -121,3 +115,7 @@ class InterrogateWidget(QWidget):
                     "%s\nThreadable Return found no results"
                     % self.debug_data.toPlainText()
                 )
+
+        self.interrogate_btn.setText("Interrogate")
+        self.interrogate_btn.setDisabled(False)
+        self.update()

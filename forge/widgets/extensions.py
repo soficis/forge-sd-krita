@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import *
+from ..qt_compat import *
 from ..widgets import CollapsibleWidget
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController

@@ -1,5 +1,4 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from ..qt_compat import *
 from enum import Enum
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController

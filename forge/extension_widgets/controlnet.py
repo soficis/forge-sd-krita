@@ -1,11 +1,13 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from ..qt_compat import *
 from enum import Enum
+import logging
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..adapters.krita_adapter import KritaAdapter
 from ..widgets import ImageInWidget, CollapsibleWidget
-from ..widgets.mask import MaskWidget # I don't know why it needs to be special like this... 
+from ..widgets.mask import MaskWidget # I don't know why it needs to be special like this...
+
+logger = logging.getLogger(__name__)
 
 class ControlNetExtension(QWidget):
     def __init__(self, settings_controller:SettingsController, api:SDAPI):
@@ -260,7 +262,7 @@ class ControlNetUnit(QWidget):
 
         row.layout().addWidget(QLabel(label))
 
-        slider = QSlider(Qt.Horizontal)
+        slider = QSlider(Qt.Orientation.Horizontal)
         box = QSpinBox()
         # Slider can't handle floats, so somethings might need to be adjusted
         if type(step) is float or type(max) is float or type(min) is float:
@@ -297,36 +299,45 @@ class ControlNetUnit(QWidget):
     
     # Update the row in place
     def _update_row(self, row:QWidget, label:str, min, max, value, variable_name:str, step=1):
-        # row.children()[0] is the QHBoxLayout
-        # Label
-        row.children()[1].setText(label)
+        layout = row.layout()
+        if layout is None:
+            return
+        old_label = row.findChildren(QLabel)
+        if old_label:
+            old_label[0].setText(label)
+        sliders = row.findChildren(QSlider)
+        spinboxes = row.findChildren(QDoubleSpinBox) + row.findChildren(QSpinBox)
+
+        for sb in spinboxes:
+            layout.removeWidget(sb)
+            sb.deleteLater()
+
         if type(step) is float or type(max) is float or type(min) is float:
-            # Sliders can't handle floats, adjust for that
-            # Slider
-            row.children()[2].setMinimum(int(min * 100))
-            row.children()[2].setMaximum(int(max * 100))
-            row.children()[2].setValue(int(value * 100))
-            # Box
-            row.children()[3] = QDoubleSpinBox()
-            row.children()[3].setMinimum(min)
-            row.children()[3].setMaximum(max)
-            row.children()[3].setValue(value)
-            # self.debug_text.setPlainText('%s\n(Floats) %s (%s to %s)' % (self.debug_text.toPlainText(), label, min, max))
-            row.children()[2].valueChanged.connect(lambda: self._sync_float_values(row.children()[2].value(), row.children()[2], row.children()[3], variable_name)) # Slider changed, update box
-            row.children()[3].valueChanged.connect(lambda: self._sync_float_values(row.children()[3].value(), row.children()[2], row.children()[3], variable_name)) # Box changed, update slider
+            if sliders:
+                sliders[0].setMinimum(int(min * 100))
+                sliders[0].setMaximum(int(max * 100))
+                sliders[0].setValue(int(value * 100))
+            box = QDoubleSpinBox()
+            box.setMinimum(min)
+            box.setMaximum(max)
+            box.setValue(value)
+            layout.addWidget(box)
+            if sliders:
+                sliders[0].valueChanged.connect(lambda: self._sync_float_values(sliders[0].value(), sliders[0], box, variable_name))
+            box.valueChanged.connect(lambda: self._sync_float_values(box.value(), sliders[0] if sliders else None, box, variable_name))
         else:
-            # Slider
-            row.children()[2].setMinimum(min)
-            row.children()[2].setMaximum(max)
-            row.children()[2].setValue(value)
-            # Box
-            row.children()[3] = QSpinBox()
-            row.children()[3].setMinimum(min)
-            row.children()[3].setMaximum(max)
-            row.children()[3].setValue(value)
-            # self.debug_text.setPlainText('%s\n(Ints) %s (%s to %s)' % (self.debug_text.toPlainText(), label, min, max))
-            row.children()[2].valueChanged.connect(lambda: self._sync_values(row.children()[2].value(), row.children()[2], row.children()[3], variable_name)) # Slider changed, update box
-            row.children()[3].valueChanged.connect(lambda: self._sync_values(row.children()[3].value(), row.children()[2], row.children()[3], variable_name)) # Box changed, update slider
+            if sliders:
+                sliders[0].setMinimum(min)
+                sliders[0].setMaximum(max)
+                sliders[0].setValue(value)
+            box = QSpinBox()
+            box.setMinimum(min)
+            box.setMaximum(max)
+            box.setValue(value)
+            layout.addWidget(box)
+            if sliders:
+                sliders[0].valueChanged.connect(lambda: self._sync_values(sliders[0].value(), sliders[0], box, variable_name))
+            box.valueChanged.connect(lambda: self._sync_values(box.value(), sliders[0] if sliders else None, box, variable_name))
 
 
     def _sync_float_values(self, float_value, slider:QSlider, box:QDoubleSpinBox, variable_name):
@@ -540,48 +551,60 @@ class ControlNetAPI():
         return self.control_types[control_type]['model_list']
 
     def get_version(self):
-        # Forge doesn't have this API call, but ControlNet may make breaking changes in the future, so it's important to have them.
         version = self.api.get('/controlnet/version')
         try:
-            if version:
+            if isinstance(version, dict):
                 return version['version']
-        except:
-            pass
-        return 3 # The latest version as of writing this - May 20, 2024
-    
+        except Exception as e:
+            logger.warning("Error getting ControlNet version: %s", e)
+        return 3
+
     def get_models(self):
-        self.models = self.api.get('/controlnet/model_list?update=true')['model_list']
-    
+        results = self.api.get('/controlnet/model_list?update=true')
+        self.models = results.get('model_list', []) if isinstance(results, dict) else []
+
     def get_modules(self):
         results = self.api.get('/controlnet/module_list?alias_names=true')
         try:
-            self.module_list = results['module_list']
-            self.module_details = results['module_detail']
-        except:
-            pass
+            if isinstance(results, dict):
+                self.module_list = results.get('module_list', {})
+                self.module_details = results.get('module_detail', {})
+            else:
+                self.module_list = {}
+                self.module_details = {}
+        except Exception as e:
+            logger.warning("Error getting ControlNet modules: %s", e)
+            self.module_list = {}
+            self.module_details = {}
 
     def get_control_types(self):
         try:
-            self.control_types = self.api.get('/controlnet/control_types')['control_types']
-        except:
-            # Treat everything as if it's part of 'All'
-            control_types = {
-                "All": {
-                    "module_list": self.module_list,
-                    "model_list": self.models,
-                    "default_option": "none",
-                    "default_model": "None"
-                }
+            results = self.api.get('/controlnet/control_types')
+            if isinstance(results, dict) and 'control_types' in results:
+                self.control_types = results['control_types']
+                return
+        except Exception as e:
+            logger.warning("Error getting control types: %s", e)
+        control_types = {
+            "All": {
+                "module_list": self.module_list,
+                "model_list": self.models,
+                "default_option": "none",
+                "default_model": "None"
             }
-            self.control_types = control_types
+        }
+        self.control_types = control_types
 
     def get_settings(self):
-        self.settings = self.api.get('/controlnet/settings')
+        results = self.api.get('/controlnet/settings')
         try:
-            self.tabs = self.settings['control_net_unit_count'] # Version 2
-        except:
+            if isinstance(results, dict):
+                self.tabs = results.get('control_net_unit_count', 1)
+            else:
+                self.tabs = 1
+        except Exception as e:
+            logger.warning("Error reading ControlNet settings: %s", e)
             self.tabs = 1
-            # raise Exception('Forge SD - Error reading ControlNet settings, defaulting to 1 tab mode')
 
     def preview(self, image:str, module:str, processor_res, threshold_a, threshold_b):
         # Module == preprocessor

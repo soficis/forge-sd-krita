@@ -1,5 +1,4 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from ..qt_compat import *
 from ..settings_controller import SettingsController
 
 class DenoiseWidget(QWidget):
@@ -19,9 +18,9 @@ class DenoiseWidget(QWidget):
         self.denoise_percent = QLabel('%s%%' % int(default_noise * 100))
 
         # Denoise Strength
-        self.denoise_slider = QSlider(Qt.Horizontal)
+        self.denoise_slider = QSlider(Qt.Orientation.Horizontal)
         self.denoise_slider.setTickInterval(10)
-        self.denoise_slider.setTickPosition(QSlider.TicksAbove)
+        self.denoise_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
         self.denoise_slider.setMinimum(0)
         self.denoise_slider.setMaximum(100)
         self.denoise_slider.setValue(int(default_noise * 100))
@@ -42,7 +41,7 @@ class DenoiseWidget(QWidget):
             'denoising_strength': denoise
         }
         self.save_settings()
-        self.settings_controller.save()
+        self.settings_controller.debounced_save()
         return data
     def set_generation_data(self, data: dict) -> None:
         if "denoising_strength" in data:

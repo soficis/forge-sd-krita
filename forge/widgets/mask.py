@@ -1,18 +1,23 @@
 from __future__ import annotations
 
-from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import (
+import logging
+from ..qt_compat import QSize, Qt
+
+logger = logging.getLogger(__name__)
+from ..qt_compat import QIcon, QPixmap
+from ..qt_compat import (
     QCheckBox,
     QComboBox,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QListView,
     QListWidget,
     QListWidgetItem,
     QPushButton,
     QSizePolicy,
     QSpinBox,
+    QTimer,
     QVBoxLayout,
     QWidget,
 )
@@ -53,6 +58,9 @@ class MaskWidget(QWidget):
             "hide_mask_on_gen": self.settings_controller.get(
                 "inpaint.hide_mask_on_gen"
             ),
+            "reference_layer": self.settings_controller.get(
+                "inpaint.reference_layer", ""
+            ),
         }
 
         self.selection_mode = "canvas"
@@ -68,10 +76,10 @@ class MaskWidget(QWidget):
         self.preview_list = QListWidget()
         self.preview_list.setFixedHeight(self.MAX_HEIGHT)
         self.preview_list.setFlow(QListView.Flow.LeftToRight)
-        self.preview_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.preview_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.preview_list.setResizeMode(QListView.ResizeMode.Adjust)
-        self.preview_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.preview_list.setViewMode(QListWidget.IconMode)
+        self.preview_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.preview_list.setViewMode(QListWidget.ViewMode.IconMode)
         self.preview_list.setIconSize(QSize(self.MAX_HEIGHT, self.MAX_HEIGHT))
         self.layout().addWidget(self.preview_list)
 
@@ -97,6 +105,46 @@ class MaskWidget(QWidget):
         button_row.layout().addWidget(use_canvas)
 
         self.layout().addWidget(button_row)
+
+        mask_row = QWidget()
+        mask_row.setLayout(QHBoxLayout())
+        mask_row.layout().setContentsMargins(0, 0, 0, 0)
+
+        brush_label = QLabel("Brush:")
+        mask_row.layout().addWidget(brush_label)
+
+        self.brush_size_box = QSpinBox()
+        self.brush_size_box.setRange(1, 500)
+        self.brush_size_box.setSuffix("px")
+        self.brush_size_box.setToolTip("Current brush size (read from Krita).")
+        mask_row.layout().addWidget(self.brush_size_box)
+
+        self.mask_opacity_toggle = QCheckBox("50%")
+        self.mask_opacity_toggle.setToolTip(
+            "Toggle mask layer opacity between 50% and 100%."
+        )
+        self.mask_opacity_toggle.setChecked(False)
+        self.mask_opacity_toggle.stateChanged.connect(self._toggle_mask_opacity)
+        mask_row.layout().addWidget(self.mask_opacity_toggle)
+
+        clear_mask = QPushButton("Clear")
+        clear_mask.setToolTip("Clear the mask layer to fully transparent.")
+        clear_mask.clicked.connect(self._clear_mask)
+        mask_row.layout().addWidget(clear_mask)
+
+        fill_mask = QPushButton("Fill")
+        fill_mask.setToolTip("Fill the mask layer to fully opaque (white).")
+        fill_mask.clicked.connect(self._fill_mask)
+        mask_row.layout().addWidget(fill_mask)
+
+        self.layout().addWidget(mask_row)
+
+        self._brush_poll_timer = QTimer(self)
+        self._brush_poll_timer.setInterval(500)
+        self._brush_poll_timer.timeout.connect(self._poll_brush_size)
+        self._brush_poll_timer.start()
+        self._hidden_layer_uuids: list[str] = []
+
         self._build_mask_qol_settings()
         self._build_inpaint_settings()
 
@@ -198,7 +246,37 @@ class MaskWidget(QWidget):
         )
         form.layout().addRow("Only masked padding", padding_box)
 
+        self.reference_layer_combo = QComboBox()
+        self.reference_layer_combo.setMinimumContentsLength(10)
+        self.reference_layer_combo.setToolTip(
+            "Select a reference layer for IP-Adapter based inpainting."
+        )
+        self._populate_reference_layers()
+        self.reference_layer_combo.currentTextChanged.connect(
+            lambda: self._update_variable(
+                "reference_layer", self.reference_layer_combo.currentText()
+            )
+        )
+        form.layout().addRow("Reference Layer", self.reference_layer_combo)
+
         self.layout().addWidget(CollapsibleWidget("Inpaint Settings", form))
+
+    def _populate_reference_layers(self) -> None:
+        """Populate the reference layer combo box with available paint layers."""
+        self.reference_layer_combo.blockSignals(True)
+        self.reference_layer_combo.clear()
+        self.reference_layer_combo.addItem("")
+        try:
+            names = self.kc.get_paintable_layer_names()
+            for name in names:
+                self.reference_layer_combo.addItem(name)
+        except Exception:
+            logger.warning("Could not populate reference layer names")
+        saved = self.variables.get("reference_layer", "")
+        idx = self.reference_layer_combo.findText(saved)
+        if idx >= 0:
+            self.reference_layer_combo.setCurrentIndex(idx)
+        self.reference_layer_combo.blockSignals(False)
 
     def _update_variable(self, key: str, value) -> None:
         self.variables[key] = value
@@ -207,6 +285,39 @@ class MaskWidget(QWidget):
         self.kc.setup_mask_layer()
         self.kc.activate_brush()
         self.get_mask_and_img("layer")
+
+    def _toggle_mask_opacity(self, state) -> None:
+        if self.mask_uuid is None:
+            return
+        layer = self.kc.get_layer_from_uuid(self.mask_uuid)
+        if layer is None:
+            return
+        checked = (state == Qt.CheckState.Checked)
+        opacity = 0.5 if checked else 1.0
+        self.kc.set_mask_opacity(opacity, layer)
+
+    def _clear_mask(self) -> None:
+        if self.mask_uuid is None:
+            return
+        layer = self.kc.get_layer_from_uuid(self.mask_uuid)
+        if layer is None:
+            return
+        self.kc.clear_mask_layer(layer)
+
+    def _fill_mask(self) -> None:
+        if self.mask_uuid is None:
+            return
+        layer = self.kc.get_layer_from_uuid(self.mask_uuid)
+        if layer is None:
+            return
+        self.kc.fill_mask_layer(layer)
+
+    def _poll_brush_size(self) -> None:
+        size = self.kc.get_active_brush_size()
+        if size > 0:
+            self.brush_size_box.blockSignals(True)
+            self.brush_size_box.setValue(size)
+            self.brush_size_box.blockSignals(False)
 
     def update_size_dict(self, mode: str = "canvas") -> None:
         if mode == "selection":
@@ -274,6 +385,9 @@ class MaskWidget(QWidget):
         self.settings_controller.set(
             "inpaint.hide_mask_on_gen", self.variables["hide_mask_on_gen"]
         )
+        self.settings_controller.set(
+            "inpaint.reference_layer", self.variables["reference_layer"]
+        )
         self.settings_controller.save()
 
     def get_generation_data(self) -> dict:
@@ -306,12 +420,28 @@ class MaskWidget(QWidget):
         if self.mask is not None:
             data["mask_img"] = self.kc.qimage_to_b64_str(self.mask)
 
+        ref_layer_name = self.variables.get("reference_layer", "")
+        if ref_layer_name:
+            ref_node = self.kc.get_layer_by_name(ref_layer_name)
+            if ref_node is not None:
+                ref_image = self.kc.get_layer_projection_image(ref_node)
+                if not ref_image.isNull():
+                    data["reference_image"] = self.kc.qimage_to_b64_str(ref_image)
+
         if self.variables["results_below_mask"] and self.mask_uuid is not None:
             data["FORGE"] = {"results_below_layer_uuid": self.mask_uuid}
 
         if self.variables["hide_mask_on_gen"] and self.mask_uuid is not None:
             layer = self.kc.get_layer_from_uuid(self.mask_uuid)
             if layer is not None:
+                self._hidden_layer_uuids.append(self.mask_uuid)
                 self.kc.set_layer_visible(layer, False)
 
         return data
+
+    def restore_hidden_layers(self) -> None:
+        for uuid_str in self._hidden_layer_uuids:
+            layer = self.kc.get_layer_from_uuid(uuid_str)
+            if layer is not None:
+                self.kc.set_layer_visible(layer, True)
+        self._hidden_layer_uuids.clear()
