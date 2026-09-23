@@ -52,9 +52,31 @@ class InterrogatePage(QWidget):
         )
         self.layout().addWidget(self.interrogate_widget)
 
-        # TODO: add a setting to decide if the interrogated text should replace, append or prepend the current prompt
+        caption_mode_row = QWidget()
+        caption_mode_row.setLayout(QHBoxLayout())
+        caption_mode_row.layout().setContentsMargins(0, 0, 0, 0)
+        caption_mode_row.layout().addWidget(QLabel("Caption inserts:"))
+        self.caption_mode_box = QComboBox()
+        self.caption_mode_box.addItems(["replace", "append", "prepend"])
+        self.caption_mode_box.setCurrentText(
+            self.settings_controller.get("interrogate.caption_mode", "replace")
+        )
+        self.caption_mode_box.setToolTip(
+            "How the interrogated caption combines with the current prompt"
+        )
+        self.caption_mode_box.currentTextChanged.connect(
+            lambda: self._update_caption_mode(self.caption_mode_box.currentText())
+        )
+        caption_mode_row.layout().addWidget(self.caption_mode_box)
+        self.layout().addWidget(caption_mode_row)
 
         self.layout().addStretch()  # Takes up the remaining space at the bottom, allowing everything to be pushed to the top
+
+    def _update_caption_mode(self, mode):
+        if mode not in ("replace", "append", "prepend"):
+            return
+        self.settings_controller.set("interrogate.caption_mode", mode)
+        self.settings_controller.save()
 
     def update(self):
         super().update()

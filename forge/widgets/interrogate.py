@@ -8,6 +8,18 @@ from ..widgets import ImageInWidget
 from ..widgets import InterrogateModelWidget
 
 
+CAPTION_MODES = ('replace', 'append', 'prepend')
+
+
+def apply_caption_mode(existing, caption, mode):
+    """Combine an interrogated caption with the current prompt text."""
+    if mode not in ('append', 'prepend') or not existing:
+        return caption
+    if mode == 'append':
+        return '%s, %s' % (existing, caption)
+    return '%s, %s' % (caption, existing)
+
+
 class InterrogateWidget(QWidget):
     def __init__(
         self,
@@ -99,8 +111,12 @@ class InterrogateWidget(QWidget):
                     self.interrogate_model_widget.get_prompt_mode()
                 )
 
+                caption_mode = self.settings_controller.get(
+                    "interrogate.caption_mode", "replace"
+                )
+                existing = self.prompt_widget.prompt_text_edit.toPlainText()
                 self.prompt_widget.prompt_text_edit.setPlainText(
-                    self.results["caption"]
+                    apply_caption_mode(existing, self.results["caption"], caption_mode)
                 )
 
                 self.prompt_widget.save_prompt()

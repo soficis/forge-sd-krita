@@ -123,6 +123,10 @@
         "inpaint_auto_update": false,
         "inpaint_below_mask": false,
         "inpaint_hide_mask": false,
+        "inpaint_mask_blur": false,
+        "inpaint_mask_mode": false,
+        "inpaint_masked_content": false,
+        "inpaint_area": false,
         "soft_inpaint": false,
         "interrogate_img2img": true,
         "interrogate_model": false
@@ -147,6 +151,7 @@
     },
     "interrogate": {
         "model": "clip",
-        "prompt_mode": "img2img"
+        "prompt_mode": "img2img",
+        "caption_mode": "replace"
     }
 }

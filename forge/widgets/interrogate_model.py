@@ -4,6 +4,23 @@ from ..settings_controller import SettingsController
 from ..adapters.krita_adapter import KritaAdapter
 
 
+CLIP_DOWNLOAD_HINT = (
+    "If interrogation returns nothing, the CLIP model download may have "
+    "failed on the backend - check the backend console and retry."
+)
+
+DEEPDANBOORU_INFO = (
+    "DeepDanbooru is not installed on the backend, so only CLIP is offered. "
+    "Install DeepDanbooru on the backend to enable anime-style tagging."
+)
+
+
+def deepdanbooru_available(api: SDAPI) -> bool:
+    """Return True when the backend exposes DeepDanbooru options."""
+    default_settings = getattr(api, "default_settings", None) or {}
+    return bool(default_settings.get("deepbooru_sort_alpha"))
+
+
 class InterrogateModelWidget(QWidget):
     def __init__(
         self,
@@ -29,13 +46,16 @@ class InterrogateModelWidget(QWidget):
             ),  # txt2img / img2img / inpaint / adetailer
         }
 
-        # TODO: clip download can fail very easily -> then the button just does nothing and the user has no idea why | check if the model was downloaded successfully?
         self.models = ["clip"]
+        self.clip_hint_text = CLIP_DOWNLOAD_HINT
 
         # check if deepdanbooru is installed
-        # TODO: add info that deepdanbooru is not installed but could be used?
-        if self.api.default_settings.get("deepbooru_sort_alpha"):
+        self.deepdanbooru_available = deepdanbooru_available(self.api)
+        if self.deepdanbooru_available:
             self.models.append("deepdanbooru")
+            self.model_status_text = ""
+        else:
+            self.model_status_text = DEEPDANBOORU_INFO
 
         self.init_variables()
 
@@ -62,6 +82,15 @@ class InterrogateModelWidget(QWidget):
             self.model_box.setToolTip("Interrogate Model")
 
             select_form.layout().addRow("Model", self.model_box)
+
+        if self.model_status_text:
+            self.model_status_label = QLabel(self.model_status_text)
+            self.model_status_label.setWordWrap(True)
+            self.layout().addWidget(self.model_status_label)
+
+        self.clip_hint_label = QLabel(self.clip_hint_text)
+        self.clip_hint_label.setWordWrap(True)
+        self.layout().addWidget(self.clip_hint_label)
 
         if not self.hide_prompt_mode:
             self.prompt_mode_box = QComboBox()

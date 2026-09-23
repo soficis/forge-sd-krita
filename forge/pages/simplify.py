@@ -35,6 +35,10 @@ class SimplifyPage(QWidget):
             'inpaint_auto_update': self.settings_controller.get('hide_ui.inpaint_auto_update'),
             'inpaint_below_mask': self.settings_controller.get('hide_ui.inpaint_below_mask'),
             'inpaint_hide_mask': self.settings_controller.get('hide_ui.inpaint_hide_mask'),
+            'inpaint_mask_blur': self.settings_controller.get('hide_ui.inpaint_mask_blur'),
+            'inpaint_mask_mode': self.settings_controller.get('hide_ui.inpaint_mask_mode'),
+            'inpaint_masked_content': self.settings_controller.get('hide_ui.inpaint_masked_content'),
+            'inpaint_area': self.settings_controller.get('hide_ui.inpaint_area'),
             'soft_inpaint': self.settings_controller.get('hide_ui.soft_inpaint'),
             "interrogate_img2img": self.settings_controller.get("hide_ui.interrogate_img2img"),
             "interrogate_model": self.settings_controller.get("hide_ui.interrogate_model"),
@@ -150,7 +154,17 @@ class SimplifyPage(QWidget):
         hide_hide_mask.setToolTip('Yeah, I know...')
         inpaint_settings.layout().addWidget(hide_hide_mask)
 
-        # TODO: add Mask Blur, Mask Mode, Masked Content, Inpaint Area
+        hide_mask_blur = self._setup_checkbox('Hide Mask Blur', 'inpaint_mask_blur')
+        inpaint_settings.layout().addWidget(hide_mask_blur)
+
+        hide_mask_mode = self._setup_checkbox('Hide Mask Mode', 'inpaint_mask_mode')
+        inpaint_settings.layout().addWidget(hide_mask_mode)
+
+        hide_masked_content = self._setup_checkbox('Hide Masked Content', 'inpaint_masked_content')
+        inpaint_settings.layout().addWidget(hide_masked_content)
+
+        hide_inpaint_area = self._setup_checkbox('Hide Inpaint Area', 'inpaint_area')
+        inpaint_settings.layout().addWidget(hide_inpaint_area)
 
             # Update Mask before Generating
         auto_update_mask_cb = QCheckBox('Update mask before generating')

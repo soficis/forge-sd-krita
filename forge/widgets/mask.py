@@ -204,40 +204,44 @@ class MaskWidget(QWidget):
         form.setLayout(QFormLayout())
         form.layout().setContentsMargins(0, 0, 0, 0)
 
-        blur_box = QSpinBox()
-        blur_box.setRange(0, 64)
-        blur_box.setValue(self.variables["mask_blur"])
-        blur_box.valueChanged.connect(
-            lambda: self._update_variable("mask_blur", blur_box.value())
-        )
-        form.layout().addRow("Mask Blur", blur_box)
+        if not self.settings_controller.get("hide_ui.inpaint_mask_blur", False):
+            blur_box = QSpinBox()
+            blur_box.setRange(0, 64)
+            blur_box.setValue(self.variables["mask_blur"])
+            blur_box.valueChanged.connect(
+                lambda: self._update_variable("mask_blur", blur_box.value())
+            )
+            form.layout().addRow("Mask Blur", blur_box)
 
-        mask_mode = QComboBox()
-        mask_mode.addItems(["Inpaint masked", "Inpaint not masked"])
-        mask_mode.setMinimumContentsLength(10)
-        mask_mode.setCurrentIndex(self.variables["mask_mode"])
-        mask_mode.currentIndexChanged.connect(
-            lambda: self._update_variable("mask_mode", mask_mode.currentIndex())
-        )
-        form.layout().addRow("Mask Mode", mask_mode)
+        if not self.settings_controller.get("hide_ui.inpaint_mask_mode", False):
+            mask_mode = QComboBox()
+            mask_mode.addItems(["Inpaint masked", "Inpaint not masked"])
+            mask_mode.setMinimumContentsLength(10)
+            mask_mode.setCurrentIndex(self.variables["mask_mode"])
+            mask_mode.currentIndexChanged.connect(
+                lambda: self._update_variable("mask_mode", mask_mode.currentIndex())
+            )
+            form.layout().addRow("Mask Mode", mask_mode)
 
-        mask_content = QComboBox()
-        mask_content.addItems(["Fill", "Original", "Latent Noise", "Latent Nothing"])
-        mask_content.setMinimumContentsLength(10)
-        mask_content.setCurrentIndex(self.variables["masked_content"])
-        mask_content.currentIndexChanged.connect(
-            lambda: self._update_variable("masked_content", mask_content.currentIndex())
-        )
-        form.layout().addRow("Masked Content", mask_content)
+        if not self.settings_controller.get("hide_ui.inpaint_masked_content", False):
+            mask_content = QComboBox()
+            mask_content.addItems(["Fill", "Original", "Latent Noise", "Latent Nothing"])
+            mask_content.setMinimumContentsLength(10)
+            mask_content.setCurrentIndex(self.variables["masked_content"])
+            mask_content.currentIndexChanged.connect(
+                lambda: self._update_variable("masked_content", mask_content.currentIndex())
+            )
+            form.layout().addRow("Masked Content", mask_content)
 
-        inpaint_area = QComboBox()
-        inpaint_area.addItems(["Whole Picture", "Only Masked"])
-        inpaint_area.setMinimumContentsLength(10)
-        inpaint_area.setCurrentIndex(self.variables["inpaint_area"])
-        inpaint_area.currentIndexChanged.connect(
-            lambda: self._update_variable("inpaint_area", inpaint_area.currentIndex())
-        )
-        form.layout().addRow("Inpaint Area", inpaint_area)
+        if not self.settings_controller.get("hide_ui.inpaint_area", False):
+            inpaint_area = QComboBox()
+            inpaint_area.addItems(["Whole Picture", "Only Masked"])
+            inpaint_area.setMinimumContentsLength(10)
+            inpaint_area.setCurrentIndex(self.variables["inpaint_area"])
+            inpaint_area.currentIndexChanged.connect(
+                lambda: self._update_variable("inpaint_area", inpaint_area.currentIndex())
+            )
+            form.layout().addRow("Inpaint Area", inpaint_area)
 
         padding_box = QSpinBox()
         padding_box.setRange(0, 64)
