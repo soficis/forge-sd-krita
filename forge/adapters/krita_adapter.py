@@ -22,6 +22,13 @@ from ..qt_compat import QImage, qAlpha, qRgb
 
 
 class _Worker(QObject):
+    """Runs a task in a QThread and reports back via signals.
+
+    Exceptions from the task are forwarded via `error`; `finished` is
+    ALWAYS emitted (try/finally) so the owning KritaAdapter clears its
+    running flag even when the task raises.
+    """
+
     finished = pyqtSignal()
     error = pyqtSignal(object)
 
@@ -44,6 +51,7 @@ class KritaAdapter:
         self.preview_layer_uid = None
         self.thread = None
         self.worker = None
+        self._running = False
 
     def version_gte(self, target_version: str) -> bool:
         current_parts = Krita.instance().version().split(".")
@@ -59,17 +67,49 @@ class KritaAdapter:
                 return False
         return True
 
-    def run_as_thread(self, function, after_function) -> None:
-        if hasattr(self, 'thread') and self.thread is not None and self.thread.isRunning():
+    def is_running(self) -> bool:
+        """Return True while a run_as_thread() worker is still active."""
+        if self._running:
+            return True
+        thread = getattr(self, "thread", None)
+        return thread is not None and bool(thread.isRunning())
+
+    def run_as_thread(self, function, after_function) -> bool:
+        """Run `function` in a background QThread; call `after_function` once done.
+
+        Contract (skip-if-busy, no queueing):
+        - Returns True when the worker was started; `after_function` fires
+          exactly once via `_Worker.finished`.
+        - Returns False immediately when a previous worker is still running;
+          the new `function` is DROPPED (never queued, never overwriting the
+          live thread/worker).
+        - The running flag is always cleared when the worker finishes, even
+          if `function` raises (the exception is forwarded via
+          `_Worker.error`), so a failed run never wedges the adapter and the
+          next call can start normally.
+        """
+        if self.is_running():
             logger.warning("run_as_thread called while a thread is already running — ignoring")
-            return
+            return False
         self.thread = QThread()
         self.worker = _Worker(function)
-        self.worker.moveToThread(self.thread)
-        self.worker.finished.connect(after_function)
-        self.worker.finished.connect(self.thread.quit)
-        self.thread.started.connect(self.worker.run)
-        self.thread.start()
+        self._running = True
+        try:
+            self.worker.moveToThread(self.thread)
+            self.worker.finished.connect(after_function)
+            self.worker.finished.connect(self.thread.quit)
+            self.worker.finished.connect(self._on_thread_finished)
+            self.thread.started.connect(self.worker.run)
+            self.thread.start()
+        except Exception:
+            self._running = False
+            logger.exception("run_as_thread failed to start worker thread")
+            return False
+        return True
+
+    def _on_thread_finished(self) -> None:
+        """Clear the running flag once the worker signals completion."""
+        self._running = False
 
     def create_new_doc(self, width: int = 512, height: int = 512) -> None:
         self.doc = Krita.instance().createDocument(
