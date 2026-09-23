@@ -36,6 +36,13 @@ class ModelConfig:
     min_size: int = 256
     default_min_size: int = 512
     default_max_size: int = 2048
+    # Width/height granularity enforced when architecture_changed fires.
+    # Flux-family DiT models require multiples of 16; SD families use 8.
+    size_step: int = 8
+    # Hires-fix second-pass semantics don't apply (distilled CFG / fixed CFG).
+    # Consumers disable or gray hr_* controls when True — no per-widget
+    # family checks.
+    hide_hires_fix: bool = False
     text_encoder_files: list[str] = field(default_factory=list)
     vae_file: str = ""
     # For Krea2's different CFG convention
@@ -111,6 +118,8 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         min_size=512,
         default_min_size=512,
         default_max_size=2048,
+        size_step=16,
+        hide_hires_fix=True,
         text_encoder_files=["clip_l.safetensors", "t5xxl_fp16.safetensors"],
         vae_file="ae.safetensors",
     ),
@@ -126,6 +135,8 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         min_size=512,
         default_min_size=512,
         default_max_size=2048,
+        size_step=16,
+        hide_hires_fix=True,
         text_encoder_files=["qwen_3_4b.safetensors"],
         vae_file="flux2-vae.safetensors",
     ),
@@ -159,6 +170,8 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         min_size=512,
         default_min_size=512,
         default_max_size=2048,
+        size_step=16,
+        hide_hires_fix=True,
         text_encoder_files=["qwen_3_4b.safetensors"],
         vae_file="ae.safetensors",
     ),
@@ -212,3 +225,53 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
 def get_model_config(family: ModelFamily) -> ModelConfig:
     """Get the ModelConfig for a given ModelFamily."""
     return CONFIGS[family]
+
+
+def get_size_constraints(family: ModelFamily) -> dict[str, int]:
+    """Size bounds + granularity for a family. Qt-free; safe under mocks."""
+    config = get_model_config(family)
+    return {
+        "step": config.size_step,
+        "min": config.min_size,
+        "max": config.default_max_size,
+    }
+
+
+def snap_to_step(value: int, step: int) -> int:
+    """Floor value down to the nearest multiple of step."""
+    if step <= 0:
+        raise ValueError("step must be greater than zero")
+    snapped = (int(value) // step) * step
+    return max(snapped, step)
+
+
+def apply_size_constraints(
+    family: ModelFamily, width: int, height: int
+) -> tuple[int, int]:
+    """Clamp a (w, h) pair into family bounds, snapped to family step."""
+    bounds = get_size_constraints(family)
+    w = min(max(int(width), bounds["min"]), bounds["max"])
+    h = min(max(int(height), bounds["min"]), bounds["max"])
+    return snap_to_step(w, bounds["step"]), snap_to_step(h, bounds["step"])
+
+
+def should_hide_hires_fix(family: ModelFamily) -> bool:
+    """Visibility predicate for hr_* controls. True means hide or disable."""
+    return get_model_config(family).hide_hires_fix
+
+
+def should_hide_negative_prompt(model_name: str) -> bool:
+    """Negative-prompt visibility for a checkpoint name.
+
+    Centralizes the KREA2-turbo substring rule so widgets never hardcode
+    family checks themselves.
+    """
+    family = detect_model_family(model_name)
+    if get_model_config(family).hide_negative_prompt:
+        return True
+    return family == ModelFamily.KREA2 and "turbo" in model_name.lower()
+
+
+def should_hide_styles(model_name: str) -> bool:
+    """Styles-selector visibility for a checkpoint name."""
+    return get_model_config(detect_model_family(model_name)).hide_styles

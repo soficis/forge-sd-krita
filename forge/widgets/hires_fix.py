@@ -4,6 +4,11 @@ from ..qt_compat import (
 )
 from ..adapters.sd_api import SDAPI
 from ..adapters.krita_adapter import KritaAdapter
+from ..domain.model_registry import (
+    ModelFamily,
+    detect_model_family,
+    should_hide_hires_fix,
+)
 from ..settings_controller import SettingsController
 
 # There are a lot of extra settings for hires fix, like the option to change checkpoint, sampler, prompts, etc.
@@ -154,6 +159,14 @@ class HiResFixWidget(QWidget):
 
         if self.ignore_hidden or not self.settings_controller.get('hide_ui.hires_denoise'):
             self.layout().addWidget(denoise_settings)
+
+    def update_for_family(self, family: ModelFamily) -> None:
+        hide = should_hide_hires_fix(family)
+        self.variables['hires_fix_hidden'] = hide
+        self.setEnabled(not hide)
+
+    def update_for_model(self, model_name: str) -> None:
+        self.update_for_family(detect_model_family(model_name))
 
     def _update_variables(self, key, value):
         self.variables[key] = value

@@ -8,7 +8,10 @@ from ..qt_compat import (
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..widgets import CollapsibleWidget
-from ..domain.model_registry import ModelFamily, detect_model_family
+from ..domain.model_registry import (
+    should_hide_negative_prompt,
+    should_hide_styles,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -194,22 +197,9 @@ class PromptWidget(QWidget):
 
     def update_for_model(self, model_name):
         """Hide/show prompt UI elements based on model type."""
-        family = detect_model_family(model_name)
-        name_lower = model_name.lower()
-
-        hide_neg = family in (
-            ModelFamily.FLUX,
-            ModelFamily.FLUX2,
-            ModelFamily.ZIMAGE,
-        )
-        if not hide_neg and family == ModelFamily.KREA2 and 'turbo' in name_lower:
-            hide_neg = True
-
-        self.negative_prompt_text_edit.setVisible(not hide_neg)
+        self.negative_prompt_text_edit.setVisible(
+            not should_hide_negative_prompt(model_name))
 
         if hasattr(self, 'style_collapsible'):
-            hide_styles = family in (
-                ModelFamily.FLUX,
-                ModelFamily.FLUX2,
-            )
-            self.style_collapsible.setVisible(not hide_styles)
+            self.style_collapsible.setVisible(
+                not should_hide_styles(model_name))
