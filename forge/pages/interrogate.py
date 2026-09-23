@@ -26,7 +26,7 @@ class InterrogatePage(QWidget):
 
         prompt_mode = self.settings_controller.get("interrogate.prompt_mode")
 
-        # TODO: probably not necessary?
+        # Default for fresh installs lacking the key; get_prompt_mode() must never be None.
         if not prompt_mode:
             prompt_mode = "img2img"
             self.settings_controller.set("interrogate.prompt_mode", prompt_mode)

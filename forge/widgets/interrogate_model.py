@@ -63,8 +63,6 @@ class InterrogateModelWidget(QWidget):
 
             select_form.layout().addRow("Model", self.model_box)
 
-        # TODO: maybe move prompt mode to own widget? InterrogateSettingsWidget?
-        # might be more useful if there are more settings for the interrogate widget
         if not self.hide_prompt_mode:
             self.prompt_mode_box = QComboBox()
             self.prompt_mode_box.addItems(
@@ -94,7 +92,7 @@ class InterrogateModelWidget(QWidget):
 
     def _update_variables(self, key, value):
         self.variables[key] = value
-        # TODO: idk if that is a good place to save the settings
+        # Save-on-change matches the app-wide pattern.
         self.save_settings()
 
     def save_settings(self):
