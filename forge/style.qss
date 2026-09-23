@@ -438,7 +438,7 @@ QPushButton#ClearQueueButton {
     color: #A1A1AA;
     border: 1px solid #2A2A33;
     border-radius: 8px;
-    padding: 6px 12px;
+    padding: 8px 16px;
     font-size: 12px;
 }
 

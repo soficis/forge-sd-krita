@@ -18,6 +18,12 @@ from ..settings_controller import SettingsController
 
 MAX_PRESETS = 50
 PRESETS_KEY = "presets"
+PRESETS_EMPTY_TEXT = "No presets saved yet - save one below"
+
+
+def presets_status_message(count: int) -> str:
+    """Placeholder text for the presets dropdown; '' when presets exist."""
+    return "" if count else PRESETS_EMPTY_TEXT
 
 
 class PresetLimitError(ValueError):
@@ -167,6 +173,7 @@ class PromptPresetsWidget(QWidget):
         try:
             self.preset_select.clear()
             self.preset_select.addItems(names)
+            self.preset_select.setPlaceholderText(presets_status_message(len(names)))
             if select is not None:
                 self.preset_select.setCurrentText(select)
         except RuntimeError:

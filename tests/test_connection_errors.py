@@ -367,6 +367,7 @@ class _FakeButton:
     def __init__(self, label):
         self._label = label
         self._enabled = True
+        self._tooltip = ""
 
     def text(self):
         return self._label
@@ -376,6 +377,12 @@ class _FakeButton:
 
     def isEnabled(self):
         return self._enabled
+
+    def setToolTip(self, tip):
+        self._tooltip = tip
+
+    def toolTip(self):
+        return self._tooltip
 
 
 class _FakeScroll:

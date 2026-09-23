@@ -3,9 +3,24 @@ from ..qt_compat import (
     QSpinBox, QVBoxLayout, QWidget, Qt,
 )
 import copy
-from ..adapters.sd_api import SDAPI
+from ..adapters.sd_api import ConnectionState, SDAPI
 from ..settings_controller import SettingsController
 from ..domain.model_registry import ModelFamily, detect_model_family, get_model_config
+
+MODELS_LOADING_TEXT = "Loading models..."
+MODELS_DISCONNECTED_TEXT = "Not connected - open Settings to connect"
+MODELS_EMPTY_TEXT = "No models found on the backend"
+
+
+def models_status_message(loading: bool, connected: bool, model_count: int) -> str:
+    """Placeholder text for the model dropdown; '' once models are listed."""
+    if loading:
+        return MODELS_LOADING_TEXT
+    if not connected:
+        return MODELS_DISCONNECTED_TEXT
+    if model_count <= 0:
+        return MODELS_EMPTY_TEXT
+    return ""
 
 # Select model, VAE, sampler, steps for generation
 # Yes, a better name would've been nice. No, I couldn't think of one
@@ -74,6 +89,14 @@ class ModelsWidget(QWidget):
 
         # Model Select
         self.model_box = QComboBox()
+        status = models_status_message(
+            loading=getattr(self.api, "state", None) is ConnectionState.CONNECTING,
+            connected=bool(getattr(self.api, "connected", False)),
+            model_count=len(self.models),
+        )
+        if status:
+            # QComboBox renders placeholderText only while the item list is empty.
+            self.model_box.setPlaceholderText(status)
         # models, server_default_model = self.api.get_models_and_default()
         self.model_box.addItems(self.models)
         # self.model_box.setCurrentText(server_default_model)

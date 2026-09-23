@@ -33,6 +33,18 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_HOST = "http://127.0.0.1:7860"
 
+DISCONNECTED_TOOLTIP_FALLBACK = (
+    "Not connected to the Forge backend - check Settings > Server"
+)
+
+
+def disabled_button_tooltip(is_connected: bool, reason: str) -> str:
+    """Why-tooltip for disabled Generate/Cancel/RemoveBG; '' when connected."""
+    if is_connected:
+        return ""
+    text = (reason or "").strip()
+    return text or DISCONNECTED_TOOLTIP_FALLBACK
+
 
 class ForgeDocker(DockWidget):
     def __init__(self) -> None:
@@ -169,10 +181,14 @@ class ForgeDocker(DockWidget):
         content_widget = self.content_area.widget()
         if content_widget is None:
             return
+        tooltip = disabled_button_tooltip(
+            is_connected, getattr(self.api, "last_error_message", "")
+        )
         for btn in content_widget.findChildren(QPushButton):
             btn_text = btn.text()
             if btn_text in ("Generate", "Cancel", "Remove Background"):
                 btn.setEnabled(is_connected)
+                btn.setToolTip(tooltip)
 
     def show_settings(self) -> None:
         self.content_area.setWidget(SettingsPage(self.settings_controller, self.api))

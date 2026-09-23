@@ -9,6 +9,20 @@ from ..settings_controller import SettingsController
 
 PAGE_SIZE = 20
 
+HISTORY_EMPTY_TEXT = "No generations yet - your history will appear here"
+
+
+def history_empty_message(total_count: int, filtered_count: int, query: str) -> str:
+    """Empty-state copy for the history list; '' when entries exist."""
+    if filtered_count > 0:
+        return ""
+    if total_count == 0:
+        return HISTORY_EMPTY_TEXT
+    query = (query or "").strip()
+    if query:
+        return "No history entries match '%s'" % query
+    return "No history entries"
+
 
 class HistoryWidget(QWidget):
     reuse_required = pyqtSignal(dict)
@@ -29,6 +43,7 @@ class HistoryWidget(QWidget):
     def draw_ui(self):
         # Search / filter row
         search_row = QHBoxLayout()
+        search_row.setContentsMargins(0, 0, 0, 0)
         search_row.addWidget(QLabel("Filter:"))
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Search by prompt text...")
@@ -38,6 +53,7 @@ class HistoryWidget(QWidget):
 
         # Controls row
         controls = QHBoxLayout()
+        controls.setContentsMargins(0, 0, 0, 0)
         refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self.load_history)
         controls.addWidget(refresh_btn)
@@ -111,11 +127,22 @@ class HistoryWidget(QWidget):
         end = start + PAGE_SIZE
         page_entries = self._filtered_history[start:end]
 
-        for idx, entry in enumerate(page_entries):
-            global_idx = start + idx
-            item = HistoryEntryWidget(entry, thumbnail_cache=self._thumbnail_cache, cache_key=global_idx)
-            item.reuse_clicked.connect(self.reuse_required.emit)
-            self.scroll_layout.addWidget(item)
+        if not page_entries:
+            query = self.search_box.text().strip() if hasattr(self, "search_box") else ""
+            message = history_empty_message(
+                len(self._all_history), len(self._filtered_history), query,
+            )
+            if message:
+                empty_label = QLabel(message)
+                empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.scroll_layout.addWidget(empty_label)
+                self.scroll_layout.setAlignment(empty_label, Qt.AlignmentFlag.AlignCenter)
+        else:
+            for idx, entry in enumerate(page_entries):
+                global_idx = start + idx
+                item = HistoryEntryWidget(entry, thumbnail_cache=self._thumbnail_cache, cache_key=global_idx)
+                item.reuse_clicked.connect(self.reuse_required.emit)
+                self.scroll_layout.addWidget(item)
 
         self._update_pagination_controls()
 

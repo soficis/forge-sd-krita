@@ -211,6 +211,11 @@ def _install_isolated_package():
         pass
 
     sd_api_mod.SDAPI = SDAPI
+
+    # models.py imports ConnectionState for the dropdown loading probe.
+    from forge.adapters.sd_api import ConnectionState as _ConnectionState
+
+    sd_api_mod.ConnectionState = _ConnectionState
     sys.modules["t8pkg.adapters.sd_api"] = sd_api_mod
 
     settings_mod = types.ModuleType("t8pkg.settings_controller")

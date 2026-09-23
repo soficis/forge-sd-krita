@@ -1,4 +1,4 @@
-from ..qt_compat import QVBoxLayout, QWidget
+from ..qt_compat import Qt, QVBoxLayout, QWidget
 from ..adapters.sd_api import SDAPI
 from ..domain.model_registry import ModelFamily, get_model_config
 from ..settings_controller import SettingsController
@@ -74,6 +74,14 @@ class Txt2ImgPage(QWidget):
         for widget in self.widgets:
             if hasattr(widget, "set_generation_data"):
                 widget.set_generation_data(data)
+
+    def keyPressEvent(self, event):
+        # Escape from a focused child (prompt field etc.) propagates here;
+        # consumed only while this page's Cancel button is active.
+        if event.key() == Qt.Key.Key_Escape and self.generate_widget.handle_escape():
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def cleanup(self) -> None:
         """Stop timer-owning children; safe on page switch or docker close."""

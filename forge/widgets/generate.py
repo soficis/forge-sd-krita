@@ -65,6 +65,18 @@ def _safe_int(value: object, fallback: int) -> int:
         return fallback
 
 
+def should_cancel_on_escape(
+    is_generating: bool, button_text: str, button_enabled: bool
+) -> bool:
+    """True when Escape should fire the Cancel action.
+
+    Requires an in-flight generation whose button currently reads Cancel
+    and is enabled - a disabled button means the backend is unreachable
+    and ``interrupt()`` would fail.
+    """
+    return bool(is_generating) and button_text == "Cancel" and bool(button_enabled)
+
+
 def _extract_tiled_request(data: dict) -> tuple[dict, int, int] | None:
     """Split tiled-generation params out of merged generation data.
 
@@ -223,6 +235,17 @@ class GenerateWidget(QWidget):
 
         if not self.is_generating:
             self._start_next_job()
+
+    def handle_escape(self) -> bool:
+        """Cancel active generation on Escape; True when the key was consumed."""
+        if should_cancel_on_escape(
+            self.is_generating,
+            self.generate_btn.text(),
+            self.generate_btn.isEnabled(),
+        ):
+            self.cancel()
+            return True
+        return False
 
     def _start_next_job(self) -> None:
         """Dequeue the next job and begin generation."""
