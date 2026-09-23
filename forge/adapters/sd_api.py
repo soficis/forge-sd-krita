@@ -609,19 +609,6 @@ class SDAPI:
         with open(log_path, "w", encoding="utf-8") as output_file:
             json.dump({"request": data, "response": response}, output_file)
 
-    def write_img_to_file(self, base64_str: str, filename: str = "saved.png") -> None:
-        with open(filename, "wb") as output_file:
-            output_file.write(base64.b64decode(base64_str))
-
-    def read_img_from_file(self, filename: str = "saved.png") -> str:
-        with open(filename, "rb") as input_file:
-            encoded = base64.b64encode(input_file.read())
-        return encoded.decode("utf-8")
-
-    def read_json_file(self, filename: str = "log.json") -> dict[str, Any]:
-        with open(filename, "r", encoding="utf-8") as input_file:
-            return json.load(input_file)
-
     def tiled_generate(
         self,
         data: dict[str, Any],
