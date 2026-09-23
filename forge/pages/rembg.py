@@ -1,4 +1,8 @@
-from ..qt_compat import *
+from ..qt_compat import (
+    QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
+    QPlainTextEdit, QPushButton, QSlider, QSpinBox, QVBoxLayout, QWidget,
+    Qt,
+)
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..adapters.krita_adapter import KritaAdapter

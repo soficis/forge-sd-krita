@@ -1,4 +1,4 @@
-from ..qt_compat import *
+from ..qt_compat import QHBoxLayout, QLabel, QSpinBox, QWidget
 
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController

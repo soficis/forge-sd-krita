@@ -1,4 +1,4 @@
-from ..qt_compat import *
+from ..qt_compat import QDoubleSpinBox, QHBoxLayout, QLabel, QWidget
 from ..adapters.sd_api import SDAPI
 from ..adapters.krita_adapter import KritaAdapter
 from ..settings_controller import SettingsController

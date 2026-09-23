@@ -1,5 +1,5 @@
 
-from ..qt_compat import *
+from ..qt_compat import QCheckBox, QVBoxLayout, QWidget
 from ..settings_controller import SettingsController
 
 class ColorCorrectionWidget(QWidget):

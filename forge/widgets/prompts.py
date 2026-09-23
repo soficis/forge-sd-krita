@@ -1,7 +1,10 @@
 import json
 import logging
 
-from ..qt_compat import *
+from ..qt_compat import (
+    QColor, QComboBox, QListWidget, QListWidgetItem, QPlainTextEdit,
+    QPushButton, QVBoxLayout, QWidget, Qt,
+)
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..widgets import CollapsibleWidget

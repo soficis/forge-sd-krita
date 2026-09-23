@@ -1,4 +1,7 @@
-from ..qt_compat import *
+from ..qt_compat import (
+    QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QPushButton,
+    QSpinBox, QTabWidget, QVBoxLayout, QWidget,
+)
 import json
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController

@@ -1,4 +1,8 @@
-from ..qt_compat import *
+from ..qt_compat import (
+    QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QGroupBox,
+    QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QSlider, QSpinBox,
+    QTabWidget, QVBoxLayout, QWidget, Qt,
+)
 from enum import Enum
 import logging
 from ..adapters.sd_api import SDAPI

@@ -1,4 +1,7 @@
-from ..qt_compat import *
+from ..qt_compat import (
+    QHBoxLayout, QIntValidator, QLabel, QLineEdit, QPushButton, QSlider,
+    QVBoxLayout, QWidget, Qt,
+)
 from ..widgets import CollapsibleWidget
 from ..adapters.krita_adapter import KritaAdapter
 from ..settings_controller import SettingsController

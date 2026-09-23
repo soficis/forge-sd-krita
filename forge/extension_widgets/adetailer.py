@@ -1,4 +1,4 @@
-from ..qt_compat import *
+from ..qt_compat import QCheckBox, QComboBox, QLabel, QVBoxLayout, QWidget
 from enum import Enum
 import logging
 from ..adapters.sd_api import SDAPI

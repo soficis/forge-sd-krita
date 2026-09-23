@@ -1,4 +1,7 @@
-from ..qt_compat import *
+from ..qt_compat import (
+    QCheckBox, QFormLayout, QHBoxLayout, QLabel, QSlider, QVBoxLayout,
+    QWidget, Qt,
+)
 from ..settings_controller import SettingsController
 from . import CollapsibleWidget
 

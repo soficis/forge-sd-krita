@@ -1,4 +1,4 @@
-from ..qt_compat import *
+from ..qt_compat import QLabel, QVBoxLayout, QWidget
 from ..widgets import CollapsibleWidget
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController

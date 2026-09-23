@@ -1,4 +1,7 @@
-from ..qt_compat import *
+from ..qt_compat import (
+    QColor, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPixmap,
+    QVBoxLayout, QWidget,
+)
 from ..settings_controller import SettingsController
 from ..adapters.krita_adapter import KritaAdapter
 from ..extras.seg_map_importer import convert_csv_to_json

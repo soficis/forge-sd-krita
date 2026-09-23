@@ -1,4 +1,4 @@
-from ..qt_compat import *
+from ..qt_compat import QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget, Qt
 from ..settings_controller import SettingsController
 
 class DenoiseWidget(QWidget):

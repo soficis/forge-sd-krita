@@ -1,4 +1,7 @@
-from ..qt_compat import *
+from ..qt_compat import (
+    QCheckBox, QGroupBox, QLabel, QPushButton, QSplitter, QVBoxLayout,
+    QWidget,
+)
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..widgets import *

@@ -1,4 +1,4 @@
-from ..qt_compat import *
+from ..qt_compat import QPushButton, QTextEdit, QVBoxLayout, QWidget
 import json
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController

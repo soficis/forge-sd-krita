@@ -1,4 +1,4 @@
-from ..qt_compat import *
+from ..qt_compat import QCheckBox, QVBoxLayout, QWidget
 from ..adapters.sd_api import SDAPI
 from ..domain.model_registry import ModelFamily, get_model_config
 from ..settings_controller import SettingsController
