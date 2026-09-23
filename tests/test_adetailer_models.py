@@ -50,6 +50,8 @@ def _blank_api() -> SDAPI:
     api.backend_type = BackendType.UNKNOWN
     api.last_url = ""
     api.last_error = None
+    api.last_error_message = ""
+    api._in_flight = 0
     api.models = []
     api.vaes = []
     api.samplers = []

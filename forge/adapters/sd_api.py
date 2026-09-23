@@ -55,9 +55,11 @@ class SDAPI:
         self.backend_type = BackendType.UNKNOWN
         self.last_url = ""
         self.last_error: Union[
-            ConnectionRefusedError, TimeoutError, urllib.error.HTTPError,
-            urllib.error.URLError, None
+            ConnectionRefusedError, TimeoutError, OSError,
+            urllib.error.HTTPError, urllib.error.URLError, Exception, None
         ] = None
+        self.last_error_message: str = ""
+        self._in_flight: int = 0
 
         self.models: list[dict[str, Any]] = []
         self.vaes: list[dict[str, Any]] = []
@@ -89,10 +91,24 @@ class SDAPI:
 
         self.refresh()
 
-    def change_host(self, host: str = DEFAULT_HOST) -> None:
+    def change_host(self, host: str = DEFAULT_HOST) -> bool:
+        """Point the client at a new host and refresh cached state.
+
+        Refuses cleanly (returns False, host unchanged) while a request
+        is in flight, so a host swap can never tear down a generation
+        mid-request; the caller may retry once idle.
+        """
+        if self._in_flight > 0:
+            logger.warning(
+                "change_host: refusing host change to %s while a request "
+                "is in flight",
+                host,
+            )
+            return False
         self.host = _normalize_host(host)
         self._cache.clear()
         self.refresh()
+        return True
 
     def _get_cached(self, key: str, fetch_fn) -> Any:
         """Return cached value if still fresh, otherwise fetch and cache."""
@@ -115,15 +131,23 @@ class SDAPI:
 
     def refresh(self) -> None:
         status = self.get_status()
-        if status is None or isinstance(self.last_error, (
-            ConnectionRefusedError, urllib.error.URLError, TimeoutError
-        )):
+        if (
+            status is None
+            or isinstance(status, Exception)
+            or self.state == ConnectionState.ERROR
+        ):
             self.state = ConnectionState.ERROR
             self.connected = False
+            if not self.last_error_message:
+                self.last_error_message = (
+                    f"Could not connect to {self.host}. "
+                    "Is Forge running with --api?"
+                )
             return
 
         self.state = ConnectionState.CONNECTED
         self.connected = True
+        self.last_error_message = ""
         refresh_calls: list[Callable[[], Any]] = [
             self.get_models,
             self.get_vaes,
@@ -175,81 +199,125 @@ class SDAPI:
 
         max_attempts = (retries if retries is not None else self.max_retries) + 1
         last_error: Union[
-            ConnectionRefusedError, TimeoutError,
-            urllib.error.HTTPError, urllib.error.URLError, None
+            ConnectionRefusedError, TimeoutError, OSError,
+            urllib.error.HTTPError, urllib.error.URLError, Exception, None
         ] = None
 
-        for attempt in range(max_attempts):
-            self.state = ConnectionState.CONNECTING
-
-            try:
-                if method == "GET":
-                    request = urllib.request.Request(url)
-                else:
-                    payload = json.dumps(data or {}).encode("utf-8")
-                    request = urllib.request.Request(
-                        url,
-                        data=payload,
-                        headers={"Content-Type": "application/json"},
-                    )
-
-                with urllib.request.urlopen(
-                    request, timeout=(connect_timeout + read_timeout)
-                ) as response:
-                    body = response.read()
-
-                self.state = ConnectionState.CONNECTED
-                self.connected = True
-                self.last_error = None
+        self._in_flight += 1
+        try:
+            for attempt in range(max_attempts):
+                self.state = ConnectionState.CONNECTING
 
                 try:
-                    return json.loads(body)
-                except (TypeError, json.JSONDecodeError):
-                    return body
+                    if method == "GET":
+                        request = urllib.request.Request(url)
+                    else:
+                        payload = json.dumps(data or {}).encode("utf-8")
+                        request = urllib.request.Request(
+                            url,
+                            data=payload,
+                            headers={"Content-Type": "application/json"},
+                        )
 
-            except urllib.error.HTTPError as exc:
-                last_error = exc
-                self.last_error = exc
-                logger.warning(
-                    "HTTP %d from %s (attempt %d/%d)",
-                    exc.code, url, attempt + 1, max_attempts,
-                )
-                if exc.code < 500:
+                    with urllib.request.urlopen(
+                        request, timeout=(connect_timeout + read_timeout)
+                    ) as response:
+                        body = response.read()
+
+                    self.state = ConnectionState.CONNECTED
+                    self.connected = True
+                    self.last_error = None
+                    self.last_error_message = ""
+
+                    try:
+                        return json.loads(body)
+                    except (TypeError, json.JSONDecodeError) as exc:
+                        self.state = ConnectionState.ERROR
+                        self.connected = False
+                        self.last_error_message = _describe_request_error(exc, url)
+                        return body
+
+                except urllib.error.HTTPError as exc:
+                    last_error = exc
+                    self.last_error = exc
+                    self.last_error_message = _describe_request_error(exc, url)
+                    logger.warning(
+                        "HTTP %d from %s (attempt %d/%d)",
+                        exc.code, url, attempt + 1, max_attempts,
+                    )
+                    if exc.code < 500:
+                        self.state = ConnectionState.ERROR
+                        return exc
+
+                except urllib.error.URLError as exc:
+                    last_error = exc
+                    self.last_error = exc
+                    self.last_error_message = _describe_request_error(exc, url)
+                    logger.warning(
+                        "URL error from %s (attempt %d/%d): %s",
+                        url, attempt + 1, max_attempts, exc.reason,
+                    )
+
+                except TimeoutError as exc:
+                    last_error = TimeoutError(
+                        f"Connection to {url} timed out"
+                    )
+                    self.last_error = last_error
+                    self.last_error_message = _describe_request_error(exc, url)
+                    logger.warning(
+                        "Timeout connecting to %s (attempt %d/%d)",
+                        url, attempt + 1, max_attempts,
+                    )
+
+                except ConnectionRefusedError as exc:
+                    last_error = ConnectionRefusedError(
+                        f"Connection to {url} refused"
+                    )
+                    self.last_error = last_error
+                    self.last_error_message = _describe_request_error(exc, url)
+                    logger.warning(
+                        "Connection refused by %s (attempt %d/%d)",
+                        url, attempt + 1, max_attempts,
+                    )
+
+                except ConnectionResetError as exc:
+                    last_error = ConnectionResetError(
+                        f"Connection to {url} was reset"
+                    )
+                    self.last_error = last_error
+                    self.last_error_message = _describe_request_error(exc, url)
+                    logger.warning(
+                        "Connection reset by %s (attempt %d/%d)",
+                        url, attempt + 1, max_attempts,
+                    )
+
+                except OSError as exc:
+                    last_error = exc
+                    self.last_error = exc
+                    self.last_error_message = _describe_request_error(exc, url)
+                    logger.warning(
+                        "Network error from %s (attempt %d/%d): %s",
+                        url, attempt + 1, max_attempts, exc,
+                    )
+
+                except Exception as exc:
+                    last_error = exc
+                    self.last_error = exc
+                    self.last_error_message = _describe_request_error(exc, url)
+                    logger.warning(
+                        "Unexpected error from %s (attempt %d/%d): %s",
+                        url, attempt + 1, max_attempts, exc,
+                    )
                     self.state = ConnectionState.ERROR
-                    return exc
+                    self.connected = False
+                    return last_error
 
-            except urllib.error.URLError as exc:
-                last_error = exc
-                self.last_error = exc
-                logger.warning(
-                    "URL error from %s (attempt %d/%d): %s",
-                    url, attempt + 1, max_attempts, exc.reason,
-                )
-
-            except TimeoutError:
-                last_error = TimeoutError(
-                    f"Connection to {url} timed out"
-                )
-                self.last_error = last_error
-                logger.warning(
-                    "Timeout connecting to %s (attempt %d/%d)",
-                    url, attempt + 1, max_attempts,
-                )
-
-            except ConnectionRefusedError:
-                last_error = ConnectionRefusedError(
-                    f"Connection to {url} refused"
-                )
-                self.last_error = last_error
-                logger.warning(
-                    "Connection refused by %s (attempt %d/%d)",
-                    url, attempt + 1, max_attempts,
-                )
-
-            if attempt < max_attempts - 1:
-                delay = min(2 ** attempt, 30)
-                logger.debug("Retrying in %ss...", delay)
-                time.sleep(delay)
+                if attempt < max_attempts - 1:
+                    delay = min(2 ** attempt, 30)
+                    logger.debug("Retrying in %ss...", delay)
+                    time.sleep(delay)
+        finally:
+            self._in_flight -= 1
 
         self.state = ConnectionState.ERROR
         self.connected = False
@@ -959,6 +1027,59 @@ class SDAPI:
 
         painter.end()
         return result
+
+
+def _describe_request_error(exc: BaseException, url: str) -> str:
+    """One-line human-readable summary of a request failure.
+
+    Surfacing only: the retry/backoff policy is unchanged.
+    """
+    if isinstance(exc, urllib.error.HTTPError):
+        if exc.code is not None and exc.code < 500:
+            return (
+                f"Request to {url} failed (HTTP {exc.code}: {exc.msg}). "
+                "The backend rejected the request."
+            )
+        return (
+            f"Backend error (HTTP {exc.code}: {exc.msg}) from {url}. "
+            "The server failed to handle the request."
+        )
+    if isinstance(exc, urllib.error.URLError):
+        reason = exc.reason
+        if isinstance(reason, TimeoutError):
+            return (
+                f"Connection timeout for {url}: the backend is not "
+                "responding - is Forge overloaded or still starting?"
+            )
+        if isinstance(reason, ConnectionRefusedError):
+            return (
+                f"Could not connect to {url} - connection refused. "
+                "Is Forge running with --api?"
+            )
+        return f"Network error contacting {url}: {reason}."
+    if isinstance(exc, TimeoutError):
+        return (
+            f"Connection timeout for {url}: the backend is not "
+            "responding - is Forge overloaded or still starting?"
+        )
+    if isinstance(exc, ConnectionRefusedError):
+        return (
+            f"Could not connect to {url} - connection refused. "
+            "Is Forge running with --api?"
+        )
+    if isinstance(exc, ConnectionResetError):
+        return (
+            f"Connection to {url} was reset by the server. "
+            "The backend may have restarted - try again."
+        )
+    if isinstance(exc, OSError):
+        return f"Network error contacting {url}: {exc}."
+    if isinstance(exc, (TypeError, ValueError)):
+        return (
+            f"Received an unreadable response from {url} ({exc}). "
+            "The backend may have returned truncated output."
+        )
+    return f"Unexpected error contacting {url}: {exc}."
 
 
 def _normalize_host(host: str) -> str:

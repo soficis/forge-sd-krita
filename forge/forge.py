@@ -159,7 +159,12 @@ class ForgeDocker(DockWidget):
 
     def _update_connection_state(self) -> None:
         is_connected = self.api.connected
-        self.connection_banner.setHidden(is_connected)
+        if is_connected:
+            self.connection_banner.setHidden(True)
+        else:
+            reason = getattr(self.api, "last_error_message", "") or "No Connection"
+            self.connection_banner.setText(reason)
+            self.connection_banner.setHidden(False)
 
         content_widget = self.content_area.widget()
         if content_widget is None:
