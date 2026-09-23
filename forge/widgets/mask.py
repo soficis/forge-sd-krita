@@ -4,6 +4,7 @@ import logging
 from ..qt_compat import QSize, Qt
 
 logger = logging.getLogger(__name__)
+from krita import Krita
 from ..qt_compat import QIcon, QPixmap
 from ..qt_compat import (
     QCheckBox,
@@ -14,6 +15,7 @@ from ..qt_compat import (
     QListView,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QSpinBox,
@@ -30,6 +32,8 @@ from ..widgets import CollapsibleWidget
 
 class MaskWidget(QWidget):
     MAX_HEIGHT = 100
+    # must match KritaAdapter.setup_mask_layer default
+    MASK_LAYER_NAME = "Forge Mask"
 
     def __init__(
         self,
@@ -88,7 +92,9 @@ class MaskWidget(QWidget):
         button_row.layout().setContentsMargins(0, 0, 0, 0)
 
         quick_mask = QPushButton("Quick Mask")
-        quick_mask.setToolTip("Creates a new layer for masking and selects the brush tool.")
+        quick_mask.setToolTip(
+            "Creates or reuses the mask layer, selects the brush, and enters paint mode."
+        )
         quick_mask.clicked.connect(self.handle_quick_mask)
         button_row.layout().addWidget(quick_mask)
 
@@ -287,9 +293,68 @@ class MaskWidget(QWidget):
         self.variables[key] = value
 
     def handle_quick_mask(self) -> None:
-        self.kc.setup_mask_layer()
-        self.kc.activate_brush()
-        self.get_mask_and_img("layer")
+        try:
+            self._ensure_mask_layer()
+            self.kc.activate_brush()
+            self._enter_paint_mode()
+            self.get_mask_and_img("layer")
+        except Exception as exc:
+            logger.warning("Quick Mask failed: %s", exc)
+            QMessageBox.warning(self, "Quick Mask", f"Quick Mask failed: {exc}")
+
+    def _ensure_mask_layer(self) -> None:
+        layer = self.kc.get_layer_by_name(self.MASK_LAYER_NAME)
+        if layer is not None:
+            self.kc.set_layer_uuid_as_active(layer.uniqueId())
+        else:
+            self.kc.setup_mask_layer(self.MASK_LAYER_NAME)
+
+    def _enter_paint_mode(self) -> None:
+        """Put the view into paint (non-eraser) mode via documented pykrita APIs.
+
+        View.setPaintingMode does not exist in the public API. Reachable
+        documented alternatives, tried in order: View.setEraserMode (Krita
+        6.0+), the checkable ``erase_action`` QAction via Krita.action()
+        (any version), else a canvas toast telling the user to paint.
+        """
+        view = self._active_view()
+        if view is None:
+            return
+        if hasattr(view, "setEraserMode"):
+            view.setEraserMode(False)
+            return
+        action = self._erase_action()
+        if action:
+            if action.isChecked():
+                action.trigger()
+            return
+        self._toast_paint_hint(view)
+
+    @staticmethod
+    def _active_view():
+        try:
+            return Krita.instance().activeWindow().activeView()
+        except Exception:
+            return None
+
+    @staticmethod
+    def _erase_action():
+        try:
+            return Krita.instance().action("erase_action")
+        except Exception:
+            return None
+
+    @staticmethod
+    def _toast_paint_hint(view) -> None:
+        try:
+            view.showFloatingMessage(
+                "Mask layer ready - paint white to mark the inpaint area",
+                QIcon(),
+                3000,
+                0,
+            )
+        except Exception:
+            logger.debug("Quick Mask toast unavailable")
 
     def _toggle_mask_opacity(self, state) -> None:
         if self.mask_uuid is None:
