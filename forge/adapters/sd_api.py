@@ -451,7 +451,10 @@ class SDAPI:
         for scripts_for_mode in self.scripts.values():
             if not isinstance(scripts_for_mode, list):
                 continue
-            if script_name_lower in [item.lower() for item in scripts_for_mode]:
+            if script_name_lower in [
+                item.lower() for item in scripts_for_mode
+                if isinstance(item, str)
+            ]:
                 return True
         return False
 
@@ -467,12 +470,12 @@ class SDAPI:
         prompts = [
             str(style.get("prompt", ""))
             for style in self.styles
-            if style.get("name") in names
+            if isinstance(style, dict) and style.get("name") in names
         ]
         negative_prompts = [
             str(style.get("negative_prompt", ""))
             for style in self.styles
-            if style.get("name") in names
+            if isinstance(style, dict) and style.get("name") in names
         ]
 
         return ", ".join(filter(None, prompts)), ", ".join(
@@ -485,6 +488,8 @@ class SDAPI:
         return [_safe_name(lora, "name") for lora in self.loras]
 
     def get_embedding_names(self) -> list[str]:
+        if not isinstance(self.embeddings, dict):
+            return []
         loaded = self.embeddings.get("loaded")
         if isinstance(loaded, dict):
             return list(loaded.keys())
@@ -537,6 +542,7 @@ class SDAPI:
             try:
                 results["info"] = json.loads(info)
             except json.JSONDecodeError:
+                logger.warning("Could not parse info JSON, keeping raw string")
                 pass
 
         self.log_request_and_response(payload, results)

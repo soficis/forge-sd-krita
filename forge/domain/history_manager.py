@@ -30,7 +30,9 @@ def _get_history_dir():
             resource_dir = krita_app.resourceDir()
             if resource_dir and os.path.isdir(resource_dir):
                 return os.path.join(str(resource_dir), "forge_history")
-    except (ImportError, AttributeError, RuntimeError):
+    except (ImportError, AttributeError, RuntimeError) as e:
+        # Tests import without krita; Krita-bundled runs always resolve above.
+        logger.debug("Krita resource dir unavailable, using ~/.forge/history: %s", e)
         pass
 
     return os.path.join(os.path.expanduser("~"), ".forge", "history")

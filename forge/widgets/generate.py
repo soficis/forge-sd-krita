@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from dataclasses import dataclass
@@ -27,10 +28,13 @@ from ..domain.generation_plan import (
     merge_generation_data,
     prune_generation_results,
 )
+from ..domain.generation_validation import validate_generation_data
 from ..domain.history_manager import HistoryManager
 from ..domain.model_registry import ModelFamily, ModelConfig, detect_model_family, get_model_config
 from ..domain.progress_state import parse_progress_state
 from ..settings_controller import SettingsController
+
+logger = logging.getLogger(__name__)
 
 
 class GenerateWidget(QWidget):
@@ -416,7 +420,8 @@ class GenerateWidget(QWidget):
                 restore = getattr(widget, 'restore_hidden_layers', None)
                 if callable(restore):
                     restore()
-            except RuntimeError:
+            except RuntimeError as e:
+                logger.debug("Failed to restore hidden layers for %s: %s", widget, e)
                 pass
 
     def _is_flux_model(self) -> bool:

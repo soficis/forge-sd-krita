@@ -1,9 +1,14 @@
 import json
+import logging
+
 from ..qt_compat import *
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..widgets import CollapsibleWidget
 from ..domain.model_registry import ModelFamily, detect_model_family
+
+logger = logging.getLogger(__name__)
+
 
 class PromptWidget(QWidget):
     NUM_LINES = 4
@@ -151,8 +156,9 @@ class PromptWidget(QWidget):
                 self.prompt_text_edit.setPlainText(self.settings_controller.get('prompts.%s_prompt' % self.mode))
                 self.negative_prompt_text_edit.setPlainText(self.settings_controller.get('prompts.%s_negative_prompt' % self.mode))
             self.update()
-        except (FileNotFoundError, json.JSONDecodeError):
+        except (FileNotFoundError, json.JSONDecodeError) as e:
             # Result is empty prompt fields - which is the desired default
+            logger.debug("Prompt restore skipped (%s): using empty defaults", e)
             pass
 
     def set_generation_data(self, data: dict) -> None:
