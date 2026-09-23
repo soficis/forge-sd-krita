@@ -504,19 +504,35 @@ class SDAPI:
         self.post("/sdapi/v1/interrupt", {})
 
     def build_payload(self, data: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(data, dict):
+            logger.warning("build_payload: non-dict input %r, using empty payload",
+                           type(data).__name__)
+            data = {}
         return build_api_payload(data)
 
     def txt2img(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        if not isinstance(data, dict):
+            logger.warning("txt2img: non-dict input %r, refusing",
+                           type(data).__name__)
+            return None
         payload = self.build_payload(data)
         results = self.post("/sdapi/v1/txt2img", payload)
         return self._normalize_generation_results(payload, results)
 
     def img2img(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        if not isinstance(data, dict):
+            logger.warning("img2img: non-dict input %r, refusing",
+                           type(data).__name__)
+            return None
         payload = self.build_payload(data)
         results = self.post("/sdapi/v1/img2img", payload)
         return self._normalize_generation_results(payload, results)
 
     def extra(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        if not isinstance(data, dict):
+            logger.warning("extra: non-dict input %r, refusing",
+                           type(data).__name__)
+            return None
         payload = self.build_payload(data)
         results = self.post("/sdapi/v1/extra-single-image", payload)
         if isinstance(results, dict):
@@ -525,6 +541,10 @@ class SDAPI:
         return None
 
     def interrogate(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        if not isinstance(data, dict):
+            logger.warning("interrogate: non-dict input %r, refusing",
+                           type(data).__name__)
+            return None
         results = self.post("/sdapi/v1/interrogate", data)
         if isinstance(results, dict):
             self.log_request_and_response(data, results)
@@ -579,6 +599,10 @@ class SDAPI:
         overlap: int = 64,
     ) -> dict[str, Any] | None:
         """Generate a large image by splitting into tiles, generating each, and blending."""
+        if not isinstance(data, dict):
+            logger.warning("tiled_generate: non-dict input %r, refusing",
+                           type(data).__name__)
+            return None
         src_b64: str | None = (
             data.get("img2img_img")
             or data.get("inpaint_img")
@@ -629,12 +653,12 @@ class SDAPI:
             )
 
             result = self.img2img(tile_data)
-            if result is None:
+            if not isinstance(result, dict):
                 logger.error("tiled_generate: tile %d generation failed", idx)
                 return None
 
             images = result.get("images", [])
-            if not images:
+            if not isinstance(images, list) or not images:
                 logger.error("tiled_generate: tile %d returned no images", idx)
                 return None
 
@@ -656,7 +680,7 @@ class SDAPI:
 
         return {
             "images": [reconstructed_b64],
-            "info": result.get("info", {}) if result else {},
+            "info": result.get("info", {}) if isinstance(result, dict) else {},
         }
 
     @staticmethod

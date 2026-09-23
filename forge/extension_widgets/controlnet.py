@@ -9,6 +9,23 @@ from ..widgets.mask import MaskWidget # I don't know why it needs to be special 
 
 logger = logging.getLogger(__name__)
 
+
+def _slider_spec(entry):
+    """Return (name, min, max, value, step) if entry is a valid slider dict, else None."""
+    if not isinstance(entry, dict):
+        return None
+    slider_min = entry.get('min')
+    slider_max = entry.get('max')
+    value = entry.get('value')
+    step = entry.get('step', 1)
+    if (not isinstance(slider_min, (int, float)) or isinstance(slider_min, bool)
+            or not isinstance(slider_max, (int, float)) or isinstance(slider_max, bool)
+            or not isinstance(value, (int, float)) or isinstance(value, bool)
+            or not isinstance(step, (int, float)) or isinstance(step, bool)):
+        return None
+    name = entry.get('name', '')
+    return (name if isinstance(name, str) else '', slider_min, slider_max, value, step)
+
 class ControlNetExtension(QWidget):
     def __init__(self, settings_controller:SettingsController, api:SDAPI):
         super().__init__()
@@ -379,8 +396,15 @@ class ControlNetUnit(QWidget):
         self.preprocessor_select.clear()
         self.model_select.clear()
 
-        self.preprocessor_list = self.cnapi.control_types[control_type]['module_list']
-        self.model_list = self.cnapi.control_types[control_type]['model_list']
+        entry = self.cnapi.control_types.get(control_type) if isinstance(self.cnapi.control_types, dict) else None
+        if not isinstance(entry, dict):
+            logger.warning("ControlNet: unknown control type %r", control_type)
+            return
+
+        module_list = entry.get('module_list', [])
+        model_list = entry.get('model_list', [])
+        self.preprocessor_list = module_list if isinstance(module_list, list) else []
+        self.model_list = model_list if isinstance(model_list, list) else []
 
         self.preprocessor_select.addItems(self.preprocessor_list)
         self.model_select.addItems(self.model_list)
@@ -395,84 +419,111 @@ class ControlNetUnit(QWidget):
         # else:
         #     self.model_select.setCurrentIndex(0)
 
-        self.preprocessor_select.setCurrentText(self.cnapi.control_types[control_type]['default_option'])
-        self.model_select.setCurrentText(self.cnapi.control_types[control_type]['default_model'])
+        default_option = entry.get('default_option', 'none')
+        default_model = entry.get('default_model', 'None')
+        self.preprocessor_select.setCurrentText(default_option if isinstance(default_option, str) else 'none')
+        self.model_select.setCurrentText(default_model if isinstance(default_model, str) else 'None')
 
     def update_model(self, model_name:str):
         self.model = model_name
 
     def set_preprocessor_settings(self, preprocessor_name:str):
-        if len(preprocessor_name) == 0:
+        if not isinstance(preprocessor_name, str) or len(preprocessor_name) == 0:
             self.preprocessor_settings.setHidden(True)
             return
-        
+
         self.preprocessor = preprocessor_name
 
-        if self.cnapi.module_details is None or preprocessor_name not in self.cnapi.module_details:
+        module_details = self.cnapi.module_details
+        if not isinstance(module_details, dict) or preprocessor_name not in module_details:
             # Not sure if this is a Forge specific problem, or if it can happen with any version that has ControlNet installed but no modules.
-            # Regardless, assume that there's no details 
+            # Regardless, assume that there's no details
             return
-        
-        details = self.cnapi.module_details[preprocessor_name] 
-        self.model_select.setHidden(details['model_free'])
-        
-        self.preprocessor_settings.setHidden(len(details['sliders']) == 0) # If there's no sliders, just hide it all
+
+        details = module_details.get(preprocessor_name)
+        if not isinstance(details, dict):
+            logger.warning("ControlNet: bad module details for %r", preprocessor_name)
+            self.preprocessor_settings.setHidden(True)
+            return
+        model_free = details.get('model_free', False)
+        self.model_select.setHidden(bool(model_free))
+
+        sliders = details.get('sliders')
+        if not isinstance(sliders, list) or len(sliders) == 0:
+            self.preprocessor_settings.setHidden(True) # If there's no sliders, just hide it all
+            return
+        self.preprocessor_settings.setHidden(False)
         if self.settings_controller.get('hide_ui.controlnet_preprocessor_settings'):
             self.preprocessor_settings.setHidden(True)
 
-        if details is None or details['sliders'] is None or len(details['sliders']) == 0:
-            return
-        
         slider_index = 0
         # some preprocessors have null in their sliders...
-        if details['sliders'][slider_index] is None:
+        if slider_index < len(sliders) and sliders[slider_index] is None:
             slider_index += 1
 
-        if 'name' in details['sliders'][slider_index] and details['sliders'][slider_index]['name'] == 'Preprocessor Resolution':
-            slider_details = details['sliders'][slider_index]
-            self.resolution_row.setHidden(False)
-            # self.resolution_row = self._setup_row('Resolution', slider_details['min'], slider_details['max'], slider_details['value'], 'preprocessor_resolution', slider_details.get('step', 1))
-            self._update_row(self.resolution_row, 'Resolution', slider_details['min'], slider_details['max'], slider_details['value'], 'preprocessor_resolution', slider_details.get('step', 1))
-            slider_index += 1
+        if slider_index < len(sliders) and isinstance(sliders[slider_index], dict) and sliders[slider_index].get('name') == 'Preprocessor Resolution':
+            spec = _slider_spec(sliders[slider_index])
+            if spec is None:
+                logger.warning("ControlNet: bad resolution slider for %r", preprocessor_name)
+                self.resolution_row.setHidden(True)
+            else:
+                _, slider_min, slider_max, slider_value, slider_step = spec
+                self.resolution_row.setHidden(False)
+                # self.resolution_row = self._setup_row('Resolution', slider_details['min'], slider_details['max'], slider_details['value'], 'preprocessor_resolution', slider_details.get('step', 1))
+                self._update_row(self.resolution_row, 'Resolution', slider_min, slider_max, slider_value, 'preprocessor_resolution', slider_step)
+                slider_index += 1
         else:
             self.resolution_row.setHidden(True)
-        
+
         # raise Exception('Forge SD - Aborting')
         # These are the unique settings that a preprocessor can have, passed into the API as threshold_a and threshold_b
         self.threshold_a_row_int.setHidden(True)
         self.threshold_a_row_float.setHidden(True)
         self.threshold_b_row_int.setHidden(True)
         self.threshold_b_row_float.setHidden(True)
-        thresholds = details['sliders'][slider_index:len(details['sliders'])] # Remove the Preprocessor Resolution from the list
+        thresholds = sliders[slider_index:len(sliders)] # Remove the Preprocessor Resolution from the list
         # self.debug_text.setPlainText('%s\n%s' % (preprocessor_name, thresholds))
         if len(thresholds) > 0:
-            steps = thresholds[0].get('step', 1)
-            if type(steps) is float or type(thresholds[0]['min']) is float or type(thresholds[0]['max']) is float or type(thresholds[0]['value']) is float:
-                self.threshold_a_row_float.setHidden(False)
-                # self.debug_text.setPlainText('%s\nFloat %s' % (self.debug_text.toPlainText(), thresholds[0]['name']))
-                self._update_row(self.threshold_a_row_float, thresholds[0]['name'], thresholds[0]['min'], thresholds[0]['max'], thresholds[0]['value'], 'threshold_a', steps)
+            spec = _slider_spec(thresholds[0])
+            if spec is None:
+                logger.warning("ControlNet: bad threshold slider for %r", preprocessor_name)
             else:
-                self.threshold_a_row_int.setHidden(False)
-                # self.debug_text.setPlainText('%s\nInt %s' % (self.debug_text.toPlainText(), thresholds[0]['name']))
-                self._update_row(self.threshold_a_row_int, thresholds[0]['name'], thresholds[0]['min'], thresholds[0]['max'], thresholds[0]['value'], 'threshold_a', steps)
-                # raise Exception('Forge SD - Debugging Aborted')
-        
+                slider_name, slider_min, slider_max, slider_value, steps = spec
+                if type(steps) is float or type(slider_min) is float or type(slider_max) is float or type(slider_value) is float:
+                    self.threshold_a_row_float.setHidden(False)
+                    # self.debug_text.setPlainText('%s\nFloat %s' % (self.debug_text.toPlainText(), thresholds[0]['name']))
+                    self._update_row(self.threshold_a_row_float, slider_name, slider_min, slider_max, slider_value, 'threshold_a', steps)
+                else:
+                    self.threshold_a_row_int.setHidden(False)
+                    # self.debug_text.setPlainText('%s\nInt %s' % (self.debug_text.toPlainText(), thresholds[0]['name']))
+                    self._update_row(self.threshold_a_row_int, slider_name, slider_min, slider_max, slider_value, 'threshold_a', steps)
+                    # raise Exception('Forge SD - Debugging Aborted')
+
         if len(thresholds) > 1:
-            steps = thresholds[1].get('step', 1)
-            if type(steps) is float:
-                self.threshold_b_row_float.setHidden(False)
-                self._update_row(self.threshold_b_row_float, thresholds[1]['name'], thresholds[1]['min'], thresholds[1]['max'], thresholds[1]['value'], 'threshold_b', steps)
+            spec = _slider_spec(thresholds[1])
+            if spec is None:
+                logger.warning("ControlNet: bad threshold slider for %r", preprocessor_name)
             else:
-                self.threshold_b_row_int.setHidden(False)
-                self._update_row(self.threshold_b_row_int, thresholds[1]['name'], thresholds[1]['min'], thresholds[1]['max'], thresholds[1]['value'], 'threshold_b', steps)
+                slider_name, slider_min, slider_max, slider_value, steps = spec
+                if type(steps) is float:
+                    self.threshold_b_row_float.setHidden(False)
+                    self._update_row(self.threshold_b_row_float, slider_name, slider_min, slider_max, slider_value, 'threshold_b', steps)
+                else:
+                    self.threshold_b_row_int.setHidden(False)
+                    self._update_row(self.threshold_b_row_int, slider_name, slider_min, slider_max, slider_value, 'threshold_b', steps)
         self.update()
     
     def gen_preview(self):
         image_data = self.img_in.get_generation_data()
+        if not isinstance(image_data, dict) or 'input_image' not in image_data:
+            logger.warning("ControlNet: bad image data for preview")
+            return
         results = self.cnapi.preview(image_data['input_image'], self.preprocessor, self.variables['preprocessor_resolution'], self.variables['threshold_a'], self.variables['threshold_b'])
-        if results is not None:
+        if isinstance(results, dict):
             kc = KritaAdapter()
             kc.results_to_layers(results, self.size_dict['x'], self.size_dict['y'], self.size_dict['w'], self.size_dict['h'], 'ControlNet Preview')
+        elif results is not None:
+            logger.warning("ControlNet: preview returned non-dict payload %r", type(results).__name__)
         # NOTE: For OpenPose, results includes {'poses': [{'people': [{'pose_keypoints_2d': [...]}] }]}
         # Those pose_keypoints_2d could be used to make a Vector preview of the pose, allowing users to edit the pose more precisely
 
@@ -542,47 +593,66 @@ class ControlNetAPI():
 
 
     def get_control_types_list(self):
-        return self.control_types.keys()
-    
+        if isinstance(self.control_types, dict):
+            return self.control_types.keys()
+        logger.warning("ControlNet: control_types is %r, returning empty list",
+                       type(self.control_types).__name__)
+        return []
+
     def get_preprocessors_for_control_type(self, control_type):
-        return self.control_types[control_type]['module_list']
-    
+        entry = self.control_types.get(control_type) if isinstance(self.control_types, dict) else None
+        if isinstance(entry, dict):
+            items = entry.get('module_list', [])
+            return items if isinstance(items, list) else []
+        logger.warning("ControlNet: unknown control type %r", control_type)
+        return []
+
     def get_models_for_control_type(self, control_type):
-        return self.control_types[control_type]['model_list']
+        entry = self.control_types.get(control_type) if isinstance(self.control_types, dict) else None
+        if isinstance(entry, dict):
+            items = entry.get('model_list', [])
+            return items if isinstance(items, list) else []
+        logger.warning("ControlNet: unknown control type %r", control_type)
+        return []
 
     def get_version(self):
         version = self.api.get('/controlnet/version')
         try:
             if isinstance(version, dict):
-                return version['version']
+                return version.get('version', 3)
         except Exception as e:
             logger.warning("Error getting ControlNet version: %s", e)
         return 3
 
     def get_models(self):
         results = self.api.get('/controlnet/model_list?update=true')
-        self.models = results.get('model_list', []) if isinstance(results, dict) else []
+        models = results.get('model_list', []) if isinstance(results, dict) else []
+        self.models = models if isinstance(models, list) else []
 
     def get_modules(self):
         results = self.api.get('/controlnet/module_list?alias_names=true')
         try:
             if isinstance(results, dict):
-                self.module_list = results.get('module_list', {})
-                self.module_details = results.get('module_detail', {})
+                module_list = results.get('module_list', [])
+                module_detail = results.get('module_detail', {})
+                self.module_list = module_list if isinstance(module_list, list) else []
+                self.module_details = module_detail if isinstance(module_detail, dict) else {}
             else:
-                self.module_list = {}
+                self.module_list = []
                 self.module_details = {}
         except Exception as e:
             logger.warning("Error getting ControlNet modules: %s", e)
-            self.module_list = {}
+            self.module_list = []
             self.module_details = {}
 
     def get_control_types(self):
         try:
             results = self.api.get('/controlnet/control_types')
-            if isinstance(results, dict) and 'control_types' in results:
-                self.control_types = results['control_types']
-                return
+            if isinstance(results, dict):
+                control_types = results.get('control_types')
+                if isinstance(control_types, dict) and control_types:
+                    self.control_types = control_types
+                    return
         except Exception as e:
             logger.warning("Error getting control types: %s", e)
         control_types = {
@@ -599,7 +669,8 @@ class ControlNetAPI():
         results = self.api.get('/controlnet/settings')
         try:
             if isinstance(results, dict):
-                self.tabs = results.get('control_net_unit_count', 1)
+                tabs = results.get('control_net_unit_count', 1)
+                self.tabs = tabs if isinstance(tabs, int) and tabs > 0 else 1
             else:
                 self.tabs = 1
         except Exception as e:
