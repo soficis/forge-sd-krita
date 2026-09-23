@@ -1,4 +1,5 @@
 from ..qt_compat import *
+import copy
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..domain.model_registry import ModelFamily, detect_model_family, get_model_config
@@ -218,13 +219,96 @@ class ModelsWidget(QWidget):
         return detect_model_family(model_name)
 
     def set_generation_data(self, data: dict) -> None:
-        # History saves widget-level keys; API uses different names
+        # History reuse: restore every field the generate flow reads via
+        # get_generation_data(). Values are deep-copied so later mutation of
+        # the source history entry cannot corrupt live widget state.
+        # Never triggers a generation as a side effect.
+        if not isinstance(data, dict):
+            return
         model_name = data.get("model") or data.get("sd_model_checkpoint")
         if model_name and isinstance(model_name, str):
-            index = self.model_box.findText(model_name)
-            if index >= 0:
-                self.model_box.setCurrentIndex(index)
-                self._update_variables('model', model_name)
+            self._update_variables('model', copy.deepcopy(model_name))
+            box = getattr(self, 'model_box', None)
+            if box is not None:
+                try:
+                    index = box.findText(model_name)
+                except AttributeError:
+                    index = -1
+                if index is not None and index >= 0:
+                    box.setCurrentIndex(index)
+        vae_name = data.get("vae") or data.get("sd_vae")
+        if vae_name and isinstance(vae_name, str):
+            self._update_variables('vae', copy.deepcopy(vae_name))
+            box = getattr(self, 'vae_box', None)
+            if box is not None:
+                try:
+                    if vae_name in getattr(self, 'vaes', [vae_name]):
+                        box.setCurrentText(vae_name)
+                except AttributeError:
+                    pass
+        sampler_name = data.get("sampler") or data.get("sampler_name")
+        if sampler_name and isinstance(sampler_name, str):
+            self._update_variables('sampler', copy.deepcopy(sampler_name))
+            box = getattr(self, 'sampler_box', None)
+            if box is not None:
+                try:
+                    if sampler_name in getattr(self, 'samplers', [sampler_name]):
+                        box.setCurrentText(sampler_name)
+                except AttributeError:
+                    pass
+        steps = data.get("sampling_steps", data.get("steps"))
+        if steps is not None:
+            try:
+                steps = int(steps)
+            except (TypeError, ValueError):
+                steps = None
+            if steps is not None:
+                self._update_variables('sampling_steps', steps)
+                spin = getattr(self, 'sampling_steps', None)
+                if spin is not None and not isinstance(spin, int):
+                    try:
+                        spin.setValue(steps)
+                    except AttributeError:
+                        pass
+        if "enable_refiner" in data:
+            enable_refiner = bool(copy.deepcopy(data["enable_refiner"]))
+            self._update_variables('enable_refiner', enable_refiner)
+            check = getattr(self, 'refiner_enable', None)
+            if check is not None:
+                try:
+                    check.setChecked(enable_refiner)
+                except AttributeError:
+                    pass
+        refiner_name = data.get("refiner")
+        if refiner_name and isinstance(refiner_name, str):
+            self._update_variables('refiner', copy.deepcopy(refiner_name))
+            box = getattr(self, 'refiner_box', None)
+            if box is not None:
+                try:
+                    if refiner_name in getattr(self, 'refiners', [refiner_name]):
+                        box.setCurrentText(refiner_name)
+                except AttributeError:
+                    pass
+        refiner_start = data.get("refiner_start")
+        if refiner_start is not None:
+            try:
+                refiner_start = float(refiner_start)
+            except (TypeError, ValueError):
+                refiner_start = None
+            if refiner_start is not None:
+                self._update_variables('refiner_start', refiner_start)
+                slider = getattr(self, 'refiner_start_slider', None)
+                if slider is not None:
+                    try:
+                        slider.setValue(int(refiner_start * 100))
+                    except AttributeError:
+                        pass
+                label = getattr(self, 'refiner_start_label', None)
+                if label is not None:
+                    try:
+                        label.setText('%s%%' % int(refiner_start * 100))
+                    except AttributeError:
+                        pass
 
     def save_settings(self):
         self.settings_controller.set('defaults.model', self.variables['model'])
