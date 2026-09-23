@@ -35,6 +35,10 @@ class Img2ImgPage(QWidget):
         if not self.settings_controller.get('hide_ui.batch'):
             self.layout().addWidget(self.batch_widget)
 
+        self.smart_size_widget = SmartSizeWidget(self.settings_controller, self.api, self.size_dict)
+        if not self.settings_controller.get('hide_ui.batch'):
+            self.layout().addWidget(self.smart_size_widget)
+
         self.cfg_widget = CFGWidget(self.settings_controller, self.api)
         self.model_widget.register_model_changed_signal(self.prompt_widget.update_for_model)
         self.model_widget.register_model_changed_signal(self.cfg_widget.update_for_model)

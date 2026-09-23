@@ -10,6 +10,7 @@ from .extensions import ExtensionWidget
 from .mask import MaskWidget
 from .color_correction import ColorCorrectionWidget
 from .batch import BatchWidget
+from .smart_size import SmartSizeWidget
 from .hires_fix import HiResFixWidget
 from .cfg import CFGWidget
 from .interrogate_model import InterrogateModelWidget
