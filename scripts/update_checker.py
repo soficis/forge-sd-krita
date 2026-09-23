@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Default GitHub repo (can be overridden)
-DEFAULT_GITHUB_REPO = "DrCyanide/forge-sd-krita"
+DEFAULT_GITHUB_REPO = "soficis/forge-sd-krita"
 
 # GitHub API endpoint for releases
 GITHUB_API_URL = "https://api.github.com/repos/{repo}/releases/latest"
