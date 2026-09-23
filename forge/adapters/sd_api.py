@@ -333,7 +333,6 @@ class SDAPI:
         return self.get("/sdapi/v1/progress")
 
     def get_options(self) -> dict[str, Any]:
-        self._invalidate_cache()
         options = self.get("/sdapi/v1/options")
         if not isinstance(options, dict):
             options = {}
