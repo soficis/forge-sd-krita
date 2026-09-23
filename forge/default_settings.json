@@ -37,6 +37,7 @@
         "adetailer_prompt": "",
         "adetailer_negative_prompt": ""
     },
+    "presets": {},
     "hr_fix": {
         "auto_hrfix": true,
         "auto_hrfix_min": 768,
@@ -110,6 +111,7 @@
         "batch": false,
         "tiled": false,
         "negative_prompt": false,
+        "prompt_presets": false,
         "styles": false,
         "extra_networks": false,
         "cfg": false,

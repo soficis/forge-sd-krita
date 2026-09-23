@@ -17,3 +17,4 @@ from .interrogate_model import InterrogateModelWidget
 from .interrogate import InterrogateWidget
 from .history import HistoryWidget
 from .tiled import TiledWidget
+from .prompt_presets import PromptPresetsWidget

@@ -20,6 +20,11 @@ class Txt2ImgPage(QWidget):
         self.prompt_widget = PromptWidget(self.settings_controller, self.api, 'txt2img')
         self.layout().addWidget(self.prompt_widget)
 
+        self.prompt_presets_widget = PromptPresetsWidget(self.settings_controller, self.prompt_widget)
+        prompt_presets_collapsed = CollapsibleWidget('Prompt Presets', self.prompt_presets_widget)
+        if not self.settings_controller.get('hide_ui.prompt_presets'):
+            self.layout().addWidget(prompt_presets_collapsed)
+
         self.batch_widget = BatchWidget(self.settings_controller, self.api)
         if not self.settings_controller.get('hide_ui.batch'):
             self.layout().addWidget(self.batch_widget)
@@ -53,7 +58,7 @@ class Txt2ImgPage(QWidget):
         if not self.settings_controller.get('hide_ui.extensions'):
             self.layout().addWidget(extension_collapsed)
 
-        self.widgets = [self.model_widget, self.prompt_widget, self.batch_widget, self.cfg_widget, self.seed_widget, self.hires_widget, self.tiled_widget, self.extension_widget]
+        self.widgets = [self.model_widget, self.prompt_widget, self.prompt_presets_widget, self.batch_widget, self.cfg_widget, self.seed_widget, self.hires_widget, self.tiled_widget, self.extension_widget]
         self.generate_widget = GenerateWidget(self.settings_controller, self.api, self.widgets, 'txt2img')
         self.layout().addWidget(self.generate_widget)
 

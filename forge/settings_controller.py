@@ -231,7 +231,14 @@ def _deep_merge_with_schema(
 
         if isinstance(default_value, dict):
             if isinstance(incoming_value, dict):
-                merged[key] = _deep_merge_with_schema(default_value, incoming_value)
+                if default_value:
+                    merged[key] = _deep_merge_with_schema(
+                        default_value, incoming_value
+                    )
+                else:
+                    # Empty default = open-ended map (e.g. prompt presets):
+                    # accept incoming entries wholesale.
+                    merged[key] = copy.deepcopy(incoming_value)
             continue
 
         if _value_matches_type(value=incoming_value, expected=default_value):
