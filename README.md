@@ -12,9 +12,10 @@ A Krita plugin for generating, transforming, and editing images with the [Forge 
 
 ## 🛠️ Requirements & Prerequisites
 
-- **Krita**: Krita 5.2+ or Krita 6.0+ (PyQt5 / PyQt6 auto-detected)
-- **Python**: Python 3.x (bundled with Krita)
-- **Backend Server**: A running instance of **[Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo)** with `--api` access enabled
+- **Krita**: Krita 5.2+ or Krita 6.0+ with Python Plugin Manager enabled (PyQt5 / PyQt6 auto-detected)
+- **Python**: Krita-bundled Python — tested on 3.12 / 3.13 / 3.14
+- **Backend**: Forge Neo backend (branch `neo` only, not A1111/classic) started with `--api` (`set COMMANDLINE_ARGS=--api`), default `http://127.0.0.1:7860`
+- **Dependencies**: stdlib + krita + PyQt5/PyQt6 only — no pip needed
 
 ### Backend Requirement
 
