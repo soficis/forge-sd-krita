@@ -203,6 +203,8 @@ python -m py_compile forge/*.py forge/*/*.py
 > - **Thread Safety & Race Conditions**: Asynchronous thread execution in `KritaAdapter` overwrites active thread handles, causing potential race conditions during concurrent generations or quick task cancellations.
 > - **Silent Exception Swallowing**: Background update checks, layer polling, and progress timers catch generic `Exception`s silently without reporting issues to the user log.
 > - **Placeholder & Skeleton Pages**: Features like the Segmentation Map page exist only as skeleton UI placeholders without backing backend integration.
+> - **Single-model backend (no concurrent model switching)**: Forge Neo serves ONE model at a time (single model loaded) — switching models unloads/reloads the backend, so concurrent multi-model generation or instant switching is unsupported by design.
+> - **Flux2 Dev 32B unsupported (Klein 4B/9B only)**: Only Flux2 Klein 4B (`klein-4b`) and 9B (`klein-9b`) checkpoints are supported via the `klein` preset; Flux2 Dev 32B is unsupported and has no registry entry — do not expect 32B checkpoints to be detected or configured.
 
 ---
 
