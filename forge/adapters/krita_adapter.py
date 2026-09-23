@@ -366,11 +366,17 @@ class KritaAdapter:
         mask_image = self.projection_to_qimage(mask_pixels, width, height)
         mask_image_bw = self.alpha_to_mask(mask_image, width, height)
 
+        try:
+            was_visible = bool(mask_layer.visible())
+        except Exception:
+            was_visible = True
         mask_layer.setVisible(False)
-        document.refreshProjection()
-        source_image = document.projection(x, y, width, height)
-        mask_layer.setVisible(True)
-        document.refreshProjection()
+        try:
+            document.refreshProjection()
+            source_image = document.projection(x, y, width, height)
+        finally:
+            mask_layer.setVisible(was_visible)
+            document.refreshProjection()
 
         return mask_image_bw, source_image
 

@@ -138,39 +138,44 @@ class GenerateWidget(QWidget):
         if self.settings_controller.get("server.save_imgs"):
             base_data["save_images"] = True
 
-        widget_payloads = [
-            widget.get_generation_data() for widget in self.list_of_widgets
-        ]
-        generation_data, processing_instructions = merge_generation_data(
-            base_data=base_data,
-            widget_payloads=widget_payloads,
-        )
-        raw_prompt = generation_data.get("prompt", "")
-        prompt = raw_prompt.strip() if isinstance(raw_prompt, str) else ""
-        validation_errors = validate_generation_data(generation_data)
-        if validation_errors or not prompt:
-            self.queue_status_label.setText(
-                "Cannot generate: %s" % (validation_errors[0] if validation_errors else "Prompt is empty.")
+        try:
+            widget_payloads = [
+                widget.get_generation_data() for widget in self.list_of_widgets
+            ]
+            generation_data, processing_instructions = merge_generation_data(
+                base_data=base_data,
+                widget_payloads=widget_payloads,
             )
-            return
-        self._apply_flux_adjustments(generation_data)
+            raw_prompt = generation_data.get("prompt", "")
+            prompt = raw_prompt.strip() if isinstance(raw_prompt, str) else ""
+            validation_errors = validate_generation_data(generation_data)
+            if validation_errors or not prompt:
+                self.queue_status_label.setText(
+                    "Cannot generate: %s" % (validation_errors[0] if validation_errors else "Prompt is empty.")
+                )
+                self._restore_hidden_layers()
+                return
+            self._apply_flux_adjustments(generation_data)
 
-        if generation_plan.resize is not None:
-            processing_instructions["resize"] = {
-                "width": generation_plan.resize.width,
-                "height": generation_plan.resize.height,
-            }
+            if generation_plan.resize is not None:
+                processing_instructions["resize"] = {
+                    "width": generation_plan.resize.width,
+                    "height": generation_plan.resize.height,
+                }
 
-        job = GenerationJob(
-            id=uuid.uuid4().hex,
-            data=generation_data,
-            x=x,
-            y=y,
-            width=width,
-            height=height,
-            processing_instructions=processing_instructions,
-            timestamp=time.time(),
-        )
+            job = GenerationJob(
+                id=uuid.uuid4().hex,
+                data=generation_data,
+                x=x,
+                y=y,
+                width=width,
+                height=height,
+                processing_instructions=processing_instructions,
+                timestamp=time.time(),
+            )
+        except Exception:
+            self._restore_hidden_layers()
+            raise
         self.job_queue.append(job)
         self._update_queue_status()
 
@@ -233,6 +238,7 @@ class GenerateWidget(QWidget):
             self.progress_timer.start(refresh_ms)
 
         except Exception as error:
+            self._restore_hidden_layers()
             self.is_generating = False
             self.current_job = None
             self.generate_btn.setText("Generate")
@@ -395,6 +401,7 @@ class GenerateWidget(QWidget):
             self.generate_btn.setText("Generate")
             self.progress_bar.setHidden(True)
             self._stop_generation_loop()
+            self._restore_hidden_layers()
             self._update_queue_status()
             self.update()
         except Exception as error:

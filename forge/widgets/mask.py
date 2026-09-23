@@ -143,7 +143,8 @@ class MaskWidget(QWidget):
         self._brush_poll_timer.setInterval(500)
         self._brush_poll_timer.timeout.connect(self._poll_brush_size)
         self._brush_poll_timer.start()
-        self._hidden_layer_uuids: list[str] = []
+        self._hidden_layer_state: dict[str, bool] = {}
+        self._active_layer_before_gen = None
 
         self._build_mask_qol_settings()
         self._build_inpaint_settings()
@@ -393,6 +394,12 @@ class MaskWidget(QWidget):
     def get_generation_data(self) -> dict:
         self.save_settings()
 
+        if self._active_layer_before_gen is None:
+            try:
+                self._active_layer_before_gen = self.kc.get_active_layer_uuid()
+            except Exception:
+                self._active_layer_before_gen = None
+
         if self.variables["auto_update_mask"] and self.mask_uuid is not None:
             self.kc.set_layer_uuid_as_active(self.mask_uuid)
             if self.selection_mode == "selection":
@@ -434,14 +441,32 @@ class MaskWidget(QWidget):
         if self.variables["hide_mask_on_gen"] and self.mask_uuid is not None:
             layer = self.kc.get_layer_from_uuid(self.mask_uuid)
             if layer is not None:
-                self._hidden_layer_uuids.append(self.mask_uuid)
+                key = str(self.mask_uuid)
+                if key not in self._hidden_layer_state:
+                    self._hidden_layer_state[key] = self._layer_is_visible(layer)
                 self.kc.set_layer_visible(layer, False)
 
         return data
 
+    @staticmethod
+    def _layer_is_visible(layer) -> bool:
+        try:
+            return bool(layer.visible())
+        except Exception:
+            return True
+
     def restore_hidden_layers(self) -> None:
-        for uuid_str in self._hidden_layer_uuids:
-            layer = self.kc.get_layer_from_uuid(uuid_str)
-            if layer is not None:
-                self.kc.set_layer_visible(layer, True)
-        self._hidden_layer_uuids.clear()
+        for uuid_str, was_visible in list(self._hidden_layer_state.items()):
+            try:
+                layer = self.kc.get_layer_from_uuid(uuid_str)
+                if layer is not None:
+                    self.kc.set_layer_visible(layer, was_visible)
+            except Exception:
+                logger.warning("Could not restore visibility for mask layer %s", uuid_str)
+        self._hidden_layer_state.clear()
+        if self._active_layer_before_gen is not None:
+            try:
+                self.kc.set_layer_uuid_as_active(self._active_layer_before_gen)
+            except Exception:
+                logger.warning("Could not restore active layer after generation")
+            self._active_layer_before_gen = None
