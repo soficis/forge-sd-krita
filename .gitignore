@@ -46,6 +46,7 @@ cyanic/
 .roomodes
 .roo-ignore
 .agents/
+.opencode/
 .brain/
 .gemini/
 implementation_plan.md
