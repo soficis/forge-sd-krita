@@ -320,6 +320,15 @@ class MaskWidget(QWidget):
             self.brush_size_box.setValue(size)
             self.brush_size_box.blockSignals(False)
 
+    def cleanup(self) -> None:
+        """Stop the brush-size poll timer; safe on page switch or close."""
+        timer = getattr(self, "_brush_poll_timer", None)
+        if timer is not None:
+            try:
+                timer.stop()
+            except RuntimeError:
+                pass
+
     def update_size_dict(self, mode: str = "canvas") -> None:
         if mode == "selection":
             (

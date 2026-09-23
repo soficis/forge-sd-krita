@@ -66,4 +66,20 @@ class BasePage(QWidget, SettingsAwareWidget, ABC):
         """Build the page UI. Called automatically after __init__ setup."""
 
     def cleanup(self) -> None:
-        """Teardown hook. Subclasses may override for cleanup logic."""
+        """Stop timer-owning children; safe on page switch or docker close."""
+        seen: set[int] = set()
+        children = list(getattr(self, "widgets", []) or [])
+        for name in ("generate_widget", "mask_widget", "history_widget"):
+            child = getattr(self, name, None)
+            if child is not None:
+                children.append(child)
+        for child in children:
+            if id(child) in seen:
+                continue
+            seen.add(id(child))
+            candidate = getattr(child, "cleanup", None)
+            if callable(candidate):
+                try:
+                    candidate()
+                except RuntimeError:
+                    pass

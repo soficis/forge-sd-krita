@@ -86,6 +86,16 @@ class InpaintPage(QWidget):
             if hasattr(widget, "set_generation_data"):
                 widget.set_generation_data(data)
 
+    def cleanup(self) -> None:
+        """Stop timer-owning children; safe on page switch or docker close."""
+        for child in list(getattr(self, "widgets", []) or []):
+            candidate = getattr(child, "cleanup", None)
+            if callable(candidate):
+                try:
+                    candidate()
+                except RuntimeError:
+                    pass
+
     def _on_architecture_changed(self, family: ModelFamily) -> None:
         config = get_model_config(family)
         self.settings_controller.set("defaults.min_size", config.default_min_size)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from .qt_compat import (
     Qt,
     QHBoxLayout,
@@ -26,6 +28,8 @@ from .pages import (
     UpscalePage,
 )
 from .settings_controller import SettingsController
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_HOST = "http://127.0.0.1:7860"
 
@@ -116,12 +120,42 @@ class ForgeDocker(DockWidget):
         index = self.page_tabs.currentIndex()
         if index < 0 or index >= len(self.pages):
             return
+        self._cleanup_current_page()
         page = self.pages[index]
         self.settings_controller.set("pages.last", page["name"])
         self.settings_controller.save()
         page["content"]()
         self.update()
         self._update_connection_state()
+
+    def closeEvent(self, event) -> None:
+        self._cleanup_current_page()
+        try:
+            self.settings_controller.close()
+        except Exception:
+            logger.exception("Forge SD - Error cancelling pending settings save")
+        super().closeEvent(event)
+
+    def _cleanup_current_page(self) -> None:
+        try:
+            old_widget = self.content_area.widget()
+        except Exception:
+            logger.exception("Forge SD - Error fetching current page for cleanup")
+            return
+        if old_widget is None:
+            return
+        cleanup = getattr(old_widget, "cleanup", None)
+        if callable(cleanup):
+            try:
+                cleanup()
+            except Exception:
+                logger.exception("Forge SD - Error cleaning up page widget")
+        delete_later = getattr(old_widget, "deleteLater", None)
+        if callable(delete_later):
+            try:
+                delete_later()
+            except Exception:
+                logger.exception("Forge SD - Error deleting old page widget")
 
     def _update_connection_state(self) -> None:
         is_connected = self.api.connected

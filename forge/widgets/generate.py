@@ -222,7 +222,9 @@ class GenerateWidget(QWidget):
 
             refresh_seconds = self.settings_controller.get("previews.refresh_seconds")
             refresh_ms = max(int(1000 * refresh_seconds), 100)
-            self.progress_timer = QTimer()
+            if self.progress_timer is not None:
+                self.progress_timer.stop()
+            self.progress_timer = QTimer(self)
             self.progress_timer.timeout.connect(
                 lambda: self.progress_check(
                     job.x,
@@ -391,6 +393,15 @@ class GenerateWidget(QWidget):
             self.progress_timer.stop()
         self.is_generating = False
         self._update_queue_status()
+
+    def cleanup(self) -> None:
+        """Stop the progress timer; safe on page switch or docker close."""
+        timer = getattr(self, "progress_timer", None)
+        if timer is not None:
+            try:
+                timer.stop()
+            except RuntimeError:
+                pass
 
     def cancel(self) -> None:
         try:

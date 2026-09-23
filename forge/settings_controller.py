@@ -72,6 +72,16 @@ class SettingsController:
         self.settings = copy.deepcopy(self._default_settings)
         self.save()
 
+    def cancel_pending_save(self) -> None:
+        """Drop a pending debounced write without flushing to disk."""
+        if self._save_timer is not None:
+            self._save_timer.cancel()
+            self._save_timer = None
+
+    def close(self) -> None:
+        """Release timer resources on docker close; idempotent."""
+        self.cancel_pending_save()
+
     def _migrate(self, settings: dict[str, Any], from_version: int) -> dict[str, Any]:
         """Apply migrations from *from_version* up to the current schema version."""
         migrated = settings.copy()

@@ -65,6 +65,16 @@ class Txt2ImgPage(QWidget):
             if hasattr(widget, "set_generation_data"):
                 widget.set_generation_data(data)
 
+    def cleanup(self) -> None:
+        """Stop timer-owning children; safe on page switch or docker close."""
+        for child in list(getattr(self, "widgets", []) or []):
+            candidate = getattr(child, "cleanup", None)
+            if callable(candidate):
+                try:
+                    candidate()
+                except RuntimeError:
+                    pass
+
     def _on_architecture_changed(self, family: ModelFamily) -> None:
         """Update architecture-specific settings when model family changes."""
         config = get_model_config(family)

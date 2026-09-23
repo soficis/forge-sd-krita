@@ -1,5 +1,4 @@
 from ..qt_compat import *
-from krita import QTimer
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..adapters.krita_adapter import KritaAdapter
