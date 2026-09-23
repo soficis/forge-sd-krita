@@ -145,8 +145,13 @@ class GenerateWidget(QWidget):
             base_data=base_data,
             widget_payloads=widget_payloads,
         )
-        prompt = generation_data.get("prompt", "").strip()
-        if not prompt:
+        raw_prompt = generation_data.get("prompt", "")
+        prompt = raw_prompt.strip() if isinstance(raw_prompt, str) else ""
+        validation_errors = validate_generation_data(generation_data)
+        if validation_errors or not prompt:
+            self.queue_status_label.setText(
+                "Cannot generate: %s" % (validation_errors[0] if validation_errors else "Prompt is empty.")
+            )
             return
         self._apply_flux_adjustments(generation_data)
 
