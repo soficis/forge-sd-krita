@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import time
@@ -348,6 +349,15 @@ class GenerateWidget(QWidget):
             return
 
         if progress_state.current_image is None:
+            return
+
+        try:
+            preview_bytes = base64.b64decode(progress_state.current_image)
+        except ValueError:
+            # binascii.Error (malformed base64) is a ValueError subclass;
+            # skip the frame rather than raising out of the Qt timer slot.
+            return
+        if not preview_bytes:
             return
 
         preview_width = width

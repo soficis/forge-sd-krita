@@ -456,6 +456,12 @@ class KritaAdapter:
     def update_preview_layer(
         self, base64str: str, x: int, y: int, w: int, h: int
     ) -> None:
+        # Live-preview path: cap the target so the progress timer never
+        # scales frames up to the full (possibly huge) generation size.
+        if w > 0 and h > 0 and max(w, h) > self._PREVIEW_MAX_DIM:
+            scale = self._PREVIEW_MAX_DIM / max(w, h)
+            w = max(1, int(w * scale))
+            h = max(1, int(h * scale))
         document = self._ensure_document()
         byte_array, img_w, img_h = self.base64_to_pixeldata(base64str, w, h)
         self._apply_preview_pixels(document, byte_array, img_w, img_h, x, y)
