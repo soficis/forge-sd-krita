@@ -145,6 +145,28 @@ ln -s ~/.local/share/krita/pykrita/forge.desktop /path/to/cyanic-sd-krita/forge.
 
 ---
 
+## 🧭 User Guide
+
+Quick start: open the **Settings** tab, enter your server URL (default `http://127.0.0.1:7860`), and click **Connect**. While disconnected, a banner at the top of the docker shows the failure reason and the Generate, Cancel, and Remove Background buttons stay disabled. Empty prompts are blocked before they reach the server with a `Cannot generate: ...` message under the Generate button.
+
+One line per mode:
+
+- **Txt2Img**: prompt to a new layer, with Prompt Presets (save/load/rename/delete, max 50) and a collapsible **Tiled (high-res)** section (tile size 512/768/1024, overlap 0-128 px).
+- **Img2Img**: transform a selection, layer, or canvas with a Denoise Strength slider; **Smart size** suggests a step-aligned resolution; inline Interrogate block for quick captioning.
+- **Inpaint**: paint white on the mask layer (**Quick Mask** bootstraps one), with mask blur, Soft Inpainting, and restore-after-generate mask visibility.
+- **Upscale**: scale by factor or to exact dimensions via `extra-single-image`, with optional canvas resize.
+- **Interrogate**: caption an image with CLIP; insert as replace, append, or prepend into a chosen mode's prompt.
+- **Remove Background**: RemBG models (u2net, isnet, and friends) with alpha matting and mask output.
+- **ControlNet**: multi-unit preprocessor/model configs under Extensions; the IP-Adapter reference slot appears only when the backend advertises it.
+- **ADetailer**: face and detail enhancement; model list fetched from the API, not hardcoded.
+- **Segmentation Map** (seg-map): searchable color list for ControlNet segmentation masks (browse and search only).
+
+Shared workflow: live preview (512 px capped) updates on the canvas during txt2img, img2img, and inpaint jobs when enabled in Settings; generation history at the bottom of each page searches, pages 20 at a time, and **Reuse** restores a full entry (model, sampler, seed, CFG, prompt, and the rest).
+
+For symptom-by-symptom fixes see `docs/TROUBLESHOOTING.md`; for checkpoint, text encoder, and VAE requirements see `docs/MODELS.md` or the [Model Matrix](#1-model-matrix--setup-requirements) above. A longer walkthrough lives in `docs/GUIDE.md` (local-only docs folder, not tracked).
+
+---
+
 ## 🧪 Testing & Verification Guide
 
 The project includes an automated test suite for domain logic alongside manual testing procedures.
