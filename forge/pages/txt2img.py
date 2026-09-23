@@ -43,12 +43,17 @@ class Txt2ImgPage(QWidget):
         if not self.settings_controller.get('hide_ui.hires_fix'):
             self.layout().addWidget(hires_collapsed)
 
+        self.tiled_widget = TiledWidget(self.settings_controller, self.api)
+        tiled_collapsed = CollapsibleWidget('Tiled (high-res)', self.tiled_widget)
+        if not self.settings_controller.get('hide_ui.tiled'):
+            self.layout().addWidget(tiled_collapsed)
+
         self.extension_widget = ExtensionWidget(self.settings_controller, self.api)
         extension_collapsed = CollapsibleWidget('Extensions', self.extension_widget)
         if not self.settings_controller.get('hide_ui.extensions'):
             self.layout().addWidget(extension_collapsed)
 
-        self.widgets = [self.model_widget, self.prompt_widget, self.batch_widget, self.cfg_widget, self.seed_widget, self.hires_widget, self.extension_widget]
+        self.widgets = [self.model_widget, self.prompt_widget, self.batch_widget, self.cfg_widget, self.seed_widget, self.hires_widget, self.tiled_widget, self.extension_widget]
         self.generate_widget = GenerateWidget(self.settings_controller, self.api, self.widgets, 'txt2img')
         self.layout().addWidget(self.generate_widget)
 

@@ -49,6 +49,11 @@
         "count": 1,
         "size": 1
     },
+    "tiled": {
+        "enabled": false,
+        "tile_size": 768,
+        "overlap": 64
+    },
     "seed": {
         "seed": -1,
         "subseed": -1,
@@ -103,6 +108,7 @@
         "sampler": false,
         "seed": false,
         "batch": false,
+        "tiled": false,
         "negative_prompt": false,
         "styles": false,
         "extra_networks": false,

@@ -37,6 +37,47 @@ from ..settings_controller import SettingsController
 logger = logging.getLogger(__name__)
 
 
+TILED_PAYLOAD_KEYS = ("tiled_enabled", "tiled_tile_size", "tiled_overlap")
+
+
+def _strip_tiled_keys(data: dict) -> dict:
+    """Return generation data without the ``tiled_*`` UI keys.
+
+    Returns the original object when no tiled keys are present; otherwise a
+    copy, so unknown UI keys never reach the API payload while the caller's
+    dict stays intact for history/reuse.
+    """
+    if not isinstance(data, dict):
+        return data
+    if not any(key in data for key in TILED_PAYLOAD_KEYS):
+        return data
+    return {
+        key: value for key, value in data.items()
+        if key not in TILED_PAYLOAD_KEYS
+    }
+
+
+def _safe_int(value: object, fallback: int) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _extract_tiled_request(data: dict) -> tuple[dict, int, int] | None:
+    """Split tiled-generation params out of merged generation data.
+
+    Returns ``(clean_data, tile_size, overlap)`` when ``tiled_enabled`` is
+    truthy, else ``None``. ``clean_data`` never carries ``tiled_*`` keys.
+    """
+    clean_data = _strip_tiled_keys(data)
+    if not isinstance(data, dict) or not data.get("tiled_enabled"):
+        return None
+    tile_size = _safe_int(data.get("tiled_tile_size", 1024), 1024)
+    overlap = _safe_int(data.get("tiled_overlap", 64), 64)
+    return clean_data, tile_size, overlap
+
+
 class GenerateWidget(QWidget):
     GENERATION_ENDPOINT_BY_MODE = {
         "txt2img": "txt2img",
@@ -329,8 +370,16 @@ class GenerateWidget(QWidget):
         if endpoint_name is None:
             raise RuntimeError(f"Unsupported generation mode: {self.mode}")
 
+        tiled_request = _extract_tiled_request(data)
+        if self.mode == "txt2img" and tiled_request is not None:
+            clean_data, tile_size, overlap = tiled_request
+            self.results = self.api.tiled_generate(
+                clean_data, tile_size=tile_size, overlap=overlap
+            )
+            return
+
         run_generation = getattr(self.api, endpoint_name)
-        self.results = run_generation(data)
+        self.results = run_generation(_strip_tiled_keys(data))
 
     def threadable_return(
         self,
