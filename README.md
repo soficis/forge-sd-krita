@@ -10,6 +10,21 @@ A Krita plugin for generating, transforming, and editing images with the [Forge 
 
 ---
 
+## 📦 What's New in 1.1.0
+
+A feature-completion release on top of 1.0.0 — the automated suite grew from 330 to **1053 tests, all passing**.
+
+- **Reliability**: History **Reuse** now restores every field (model, sampler, seed, CFG, prompt); ControlNet survives error payloads; thread-handle races guarded; silent failures are logged; connection failures surface in a top banner with disabled-button tooltips; timers stop on page close; mask visibility is restored after generation.
+- **Validation**: empty prompts and invalid batch/steps/seed values are rejected client-side with an inline `Cannot generate: …` message before anything reaches the server.
+- **Artist tools**: Prompt Presets (save/load/rename/delete, max 50), Smart-size resolution suggestions (img2img + inpaint), and a one-click **Quick Mask** bootstrap on inpaint.
+- **Generation**: collapsible **Tiled (high-res)** controls on txt2img; live canvas preview (512 px capped, malformed frames skipped) during txt2img/img2img/inpaint; Flux dynamic sizing and control visibility per family; an IP-Adapter reference slot that appears only when the backend advertises it.
+- **Extensions & data**: ADetailer model list fetched from the API; Segmentation Map page renders a searchable color list; dead `sd_api` file-IO helpers removed; `qt_compat` now exports explicit symbols instead of star imports.
+- **Polish & docs**: measured performance fixes (settings save, history, API cache, preview), empty states / disabled-button tooltips / loading indicator, this README's User Guide, and a full walkthrough in `docs/GUIDE.md` (local-only).
+
+Still open (not in 1.1.0): txt2img Hires Fix does not re-apply family size rules on model change, the Smart-size widget is not on the txt2img page, and `generate_widget.cleanup()` is never reached from `page.cleanup()` (latent). Full detail lives in the local-only `docs/CHANGELOG.md` and `docs/STATUS.md`.
+
+---
+
 ## 🛠️ Requirements & Prerequisites
 
 - **Krita**: Krita 5.2+ or Krita 6.0+ with Python Plugin Manager enabled (PyQt5 / PyQt6 auto-detected)
@@ -173,10 +188,10 @@ The project includes an automated test suite for domain logic alongside manual t
 
 ### 1. Automated Unit Tests
 
-Execute the unit test suite across all 7 domain modules (330 tests total):
+Execute the unit test suite across domain logic and critical widget paths (**1053 tests** as of 1.1.0):
 
 ```bash
-# Run all 330 unit tests
+# Run all 1053 tests
 python -m pytest tests/ -v
 ```
 
@@ -185,12 +200,33 @@ python -m pytest tests/ -v
 | Module | Tests | Focus Area |
 |---|---|---|
 | `test_model_registry.py` | 149 | 9-model family regex detection, forge presets, CFG profiles, and size defaults |
-| `test_payload_builder.py` | 36 | Translation of plugin parameters to API payload formats and model overrides |
-| `test_sd_api.py` | 26 | Backend connection state machine, retry logic, and payload dispatching |
-| `test_settings_controller.py` | 35 | Settings migration, loading defaults, fallback defaults, and debounced saving |
-| `test_history_manager.py` | 18 | Generation history storage, search filtering, pagination, and TTL cleanup |
+| `test_smart_resolution.py` | 130 | Step-aligned resolution suggestion math |
+| `test_ui_surface.py` | 92 | Widget/page surface construction tests |
+| `test_controlnet_dict_guards.py` | 83 | Non-dict / error-payload guards in ControlNet and sd_api |
+| `test_qt_compat_imports.py` | 67 | Explicit `qt_compat` symbol surface |
+| `test_controlnet_ip_adapter.py` | 48 | IP-Adapter capability gating and wiring |
+| `test_generation_validation.py` | 46 | Client-side prompt/batch/steps/seed validation |
 | `test_generation_plan.py` | 40 | Aspect ratio math, canvas bounds scaling, and pixel alignment |
+| `test_payload_builder.py` | 36 | Translation of plugin parameters to API payload formats and model overrides |
+| `test_settings_controller.py` | 35 | Settings migration, loading defaults, fallback defaults, and debounced saving |
+| `test_flux_ui.py` | 35 | Flux dynamic sizing and control visibility |
+| `test_ux_polish.py` | 32 | Empty states, disabled tooltips, loading indicator, spacing |
+| `test_prompt_presets.py` | 29 | Prompt preset CRUD |
+| `test_connection_errors.py` | 28 | Connection failure modes and banner surfacing |
+| `test_seg_map.py` | 28 | Segmentation map list rendering and search |
+| `test_sd_api.py` | 26 | Backend connection state machine, retry logic, and payload dispatching |
 | `test_progress_state.py` | 26 | Parsing Forge progress polling API responses |
+| `test_task18_widget_todos.py` | 22 | Triaged widget TODO paths |
+| `test_tiled_txt2img.py` | 17 | Tiled generation control wiring |
+| `test_timer_cleanup.py` | 15 | Timer teardown on page/widget cleanup |
+| `test_history_manager.py` | 18 | Generation history storage, search filtering, pagination, and TTL cleanup |
+| `test_adetailer_models.py` | 13 | API-driven ADetailer model list |
+| `test_live_preview.py` | 12 | Live preview frames and 512 px cap |
+| `test_mask_visibility.py` | 9 | Mask layer snapshot/restore around generation |
+| `test_quick_mask.py` | 8 | Quick Mask layer bootstrap |
+| `test_krita_adapter_thread.py` | 5 | Concurrent-thread guard in `run_as_thread()` |
+| `test_models_history_reuse.py` | 4 | Full history entry restore via copy-on-reuse |
+| **Total** | **1053** | |
 
 ### 2. Manual Verification Checklist
 
@@ -214,17 +250,13 @@ python -m py_compile forge/*.py forge/*/*.py
 ## ⚠️ Known Issues & Limitations
 
 > [!WARNING]
-> **There are far too many known issues, unhandled UI edge cases, and missing error guards to count.**
+> **Most UI code still lacks dedicated unit tests, and a few follow-ups remain open.**
 > 
-> While core domain logic and payload construction have 330 unit tests, over **~5,600 lines of UI widget, page, and docker code have zero unit test coverage**. Users and developers should expect unhandled exceptions, silent failures, thread race conditions, broken UI states, missing error prompts, and incomplete features.
+> Core domain logic and critical widget paths have **1053 unit tests**, but most of the ~5,600 lines of PyQt widget, page, and docker code remain untested — expect occasional unhandled Qt edge cases. The critical 1.0.0 issues (history reuse, ControlNet error crashes, thread races, silent exception swallowing, missing prompt validation, mask visibility, timer leaks, hardcoded ADetailer models, skeleton Segmentation Map page) were fixed in 1.1.0 — see [What's New](#-whats-new-in-110).
 > 
-> Major categories of known issues include:
-> - **Untested UI Infrastructure**: Over 5,600 lines of PyQt widget and page implementation code lack automated test coverage. Expect unexpected widget behavior and Qt runtime exceptions.
-> - **Partial Feature Restoration**: History entry reuse only partially restores settings (restoring models, VAEs, and samplers from history entries is partially broken).
-> - **Extension & API Error Handling**: Extensions (such as ControlNet and RemBG) lack defensive error parsing and can crash the plugin Docker if the backend returns unexpected error payloads.
-> - **Thread Safety & Race Conditions**: Asynchronous thread execution in `KritaAdapter` overwrites active thread handles, causing potential race conditions during concurrent generations or quick task cancellations.
-> - **Silent Exception Swallowing**: Background update checks, layer polling, and progress timers catch generic `Exception`s silently without reporting issues to the user log.
-> - **Placeholder & Skeleton Pages**: Features like the Segmentation Map page exist only as skeleton UI placeholders without backing backend integration.
+> Still open:
+> - **Open follow-ups**: txt2img Hires Fix does not re-apply per-family size rules on model change; the Smart-size widget is not on the txt2img page; and `generate_widget.cleanup()` is never reached from `page.cleanup()` because `self.widgets` excludes it (latent).
+> - **Untested UI infrastructure**: the majority of PyQt widget and page implementation code still has no dedicated test coverage (critical paths are covered).
 > - **Single-model backend (no concurrent model switching)**: Forge Neo serves ONE model at a time (single model loaded) — switching models unloads/reloads the backend, so concurrent multi-model generation or instant switching is unsupported by design.
 > - **Flux2 Dev 32B unsupported (Klein 4B/9B only)**: Only Flux2 Klein 4B (`klein-4b`) and 9B (`klein-9b`) checkpoints are supported via the `klein` preset; Flux2 Dev 32B is unsupported and has no registry entry — do not expect 32B checkpoints to be detected or configured.
 
