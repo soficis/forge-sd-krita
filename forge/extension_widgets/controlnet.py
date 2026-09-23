@@ -30,6 +30,11 @@ def _slider_spec(entry):
     name = entry.get('name', '')
     return (name if isinstance(name, str) else '', slider_min, slider_max, value, step)
 
+def _is_ip_adapter_name(name: str) -> bool:
+    """True when an introspected preprocessor/model/script name is IP-Adapter."""
+    normalized = name.lower().replace('_', '-').replace(' ', '-')
+    return 'ip-adapter' in normalized or 'ipadapter' in normalized
+
 class ControlNetExtension(QWidget):
     def __init__(self, settings_controller:SettingsController, api:SDAPI):
         super().__init__()
@@ -120,6 +125,15 @@ class ControlNetUnit(QWidget):
         self.mask_in = MaskWidget(self.settings_controller, self.api, self.size_dict)
         self.layout().addWidget(self.mask_in)
         self.mask_in.setVisible(self.use_mask.isChecked())
+
+        self.ref_slot = QWidget()
+        self.ref_slot.setLayout(QVBoxLayout())
+        self.ref_slot.layout().setContentsMargins(0,0,0,0)
+        self.ref_slot.layout().addWidget(QLabel('Reference Image (IP-Adapter)'))
+        self.ref_in = ImageInWidget(self.settings_controller, self.api, 'reference_image', self.size_dict)
+        self.ref_slot.layout().addWidget(self.ref_in)
+        self.layout().addWidget(self.ref_slot)
+        self.apply_ref_slot_gate()
 
         check_row = QWidget()
         check_row.setLayout(QHBoxLayout())
@@ -275,6 +289,16 @@ class ControlNetUnit(QWidget):
         # Toggle between using just self.img_in or using self.mask_in
         self.img_in.setVisible(not use_mask)
         self.mask_in.setVisible(use_mask)
+
+    def ref_image_supported(self) -> bool:
+        """Capability gate: True only when introspection found IP-Adapter modules."""
+        return bool(getattr(self.cnapi, 'ip_adapter', False))
+
+    def apply_ref_slot_gate(self) -> bool:
+        """Show the reference-image slot only when ref_image_supported(); returns visibility."""
+        visible = self.ref_image_supported()
+        self.ref_slot.setVisible(visible)
+        return visible
 
     def _setup_row(self, label:str, min, max, value, variable_name:str, step=1):
         row = QWidget()
@@ -557,7 +581,16 @@ class ControlNetUnit(QWidget):
         # if self.cnapi.version >= 3:
             # data['control_mode'] = self.control_mode_options[self.control_mode]
 
-        if self.use_mask.isChecked():
+        ref_b64 = None
+        if self.ref_image_supported() and getattr(self.ref_in, 'image', None) is not None:
+            ref_data = self.ref_in.get_generation_data()
+            value = ref_data.get('reference_image') if isinstance(ref_data, dict) else None
+            if isinstance(value, str) and value:
+                ref_b64 = value
+
+        if ref_b64 is not None:
+            data['image'] = ref_b64
+        elif self.use_mask.isChecked():
             mask_data = self.mask_in.get_generation_data()
             # data['input_image'] = mask_data['inpaint_img']
             # data['mask'] = mask_data['mask_img']
@@ -594,6 +627,7 @@ class ControlNetAPI():
         self.get_control_types()
         self.get_settings()
         self.version = self.get_version()
+        self.ip_adapter = self.detect_ip_adapter()
 
 
     def get_control_types_list(self):
@@ -680,6 +714,58 @@ class ControlNetAPI():
         except Exception as e:
             logger.warning("Error reading ControlNet settings: %s", e)
             self.tabs = 1
+
+    def detect_ip_adapter(self) -> bool:
+        """Detect IP-Adapter support from existing introspection (no new endpoints).
+
+        Sources: ControlNet preprocessor/model dropdown lists, SDAPI
+        get_scripts() (/sdapi/v1/scripts), and Forge Neo forge-additional-modules
+        (/sdapi/v1/forge-additional-modules). Any source naming an IP-Adapter
+        module enables the unit reference-image slot.
+        """
+        candidates = []
+
+        def _extend(items):
+            if isinstance(items, list):
+                candidates.extend(item for item in items if isinstance(item, str))
+
+        try:
+            _extend(self.module_list)
+            _extend(self.models)
+            if isinstance(self.control_types, dict):
+                for entry in self.control_types.values():
+                    if isinstance(entry, dict):
+                        _extend(entry.get('module_list'))
+                        _extend(entry.get('model_list'))
+
+            try:
+                scripts = self.api.get_scripts()
+                if isinstance(scripts, dict):
+                    for mode_scripts in scripts.values():
+                        _extend(mode_scripts)
+            except Exception as e:
+                logger.warning("ControlNet: get_scripts introspection failed: %s", e)
+
+            try:
+                modules = self.api.get_additional_modules()
+                if isinstance(modules, list):
+                    for module in modules:
+                        if isinstance(module, str):
+                            candidates.append(module)
+                        elif isinstance(module, dict):
+                            name = module.get('name')
+                            if isinstance(name, str):
+                                candidates.append(name)
+            except Exception as e:
+                logger.warning("ControlNet: forge-additional-modules introspection failed: %s", e)
+
+            detected = any(_is_ip_adapter_name(name) for name in candidates)
+            if detected:
+                logger.info("ControlNet: IP-Adapter advertised by backend; reference image slot enabled")
+            return detected
+        except Exception as e:
+            logger.warning("ControlNet: IP-Adapter detection failed: %s", e)
+            return False
 
     def preview(self, image:str, module:str, processor_res, threshold_a, threshold_b):
         # Module == preprocessor
