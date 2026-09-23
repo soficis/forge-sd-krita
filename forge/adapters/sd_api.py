@@ -70,6 +70,7 @@ class SDAPI:
         self.embeddings: dict[str, Any] = {}
         self.hypernetworks: list[dict[str, Any]] = []
         self.additional_modules: list[dict[str, Any]] = []
+        self.adetailer_models: list[str] = []
 
         self.default_settings: dict[str, Any] = {}
         self.defaults = {
@@ -131,6 +132,7 @@ class SDAPI:
             self.get_facerestorers,
             self.get_styles,
             self.get_scripts,
+            self.get_adetailer_models,
             self.get_loras,
             self.get_embeddings,
             self.get_hypernetworks,
@@ -377,6 +379,34 @@ class SDAPI:
             self.loras = loras if isinstance(loras, list) else []
             return self.loras
         return self._get_cached("loras", _fetch)
+
+    def get_adetailer_models(self) -> list[str]:
+        def _fetch():
+            try:
+                if not self.script_installed("adetailer"):
+                    self.adetailer_models = []
+                    return self.adetailer_models
+            except Exception:
+                logger.warning("get_adetailer_models: script check failed")
+                self.adetailer_models = []
+                return self.adetailer_models
+            models: list[str] = []
+            try:
+                data = self.get("/adetailer/v1/models")
+            except Exception:
+                logger.warning("get_adetailer_models: request failed")
+                data = None
+            models = _parse_adetailer_models(data)
+            if not models:
+                try:
+                    info = self.get("/sdapi/v1/script-info")
+                except Exception:
+                    logger.warning("get_adetailer_models: script-info failed")
+                    info = None
+                models = _parse_adetailer_models(info)
+            self.adetailer_models = models
+            return self.adetailer_models
+        return self._get_cached("adetailer_models", _fetch)
 
     def get_embeddings(self) -> dict[str, Any]:
         def _fetch():
@@ -957,6 +987,33 @@ def _safe_name(item: Any, key: str) -> str:
         if isinstance(value, str):
             return value
     return ""
+
+
+def _parse_adetailer_models(data: Any) -> list[str]:
+    """Extract ADetailer model names from API responses."""
+    if isinstance(data, list):
+        names = [m for m in data if isinstance(m, str) and m]
+        if names:
+            return names
+        for item in data:
+            if isinstance(item, dict):
+                nested = _parse_adetailer_models(item)
+                if nested:
+                    return nested
+        return []
+    if isinstance(data, dict):
+        for key in ("models", "ad_model", "choices"):
+            value = data.get(key)
+            if isinstance(value, list):
+                names = [m for m in value if isinstance(m, str) and m]
+                if names:
+                    return names
+        for value in data.values():
+            nested = _parse_adetailer_models(value)
+            if nested:
+                return nested
+        return []
+    return []
 
 
 __all__ = ["SDAPI", "BackendType", "ConnectionState"]

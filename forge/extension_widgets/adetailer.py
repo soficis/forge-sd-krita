@@ -1,8 +1,11 @@
 from ..qt_compat import *
 from enum import Enum
+import logging
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..widgets import PromptWidget, CollapsibleWidget
+
+logger = logging.getLogger(__name__)
 
 class ADetailerExtension(QWidget):
     def __init__(self, settings_controller:SettingsController, api:SDAPI):
@@ -27,21 +30,25 @@ class ADetailerExtension(QWidget):
         self.enable_cb.stateChanged.connect(lambda: self.set_enabled(self.enable_cb.isChecked()))
         self.layout().addWidget(self.enable_cb)
 
-        # Model Select
-        models = [ # Assuming these are standard with the install... there's no API to check what's available
-            'face_yolov8n.pt',
-            'face_yolov8s.pt',
-            'hand_yolov8n.pt',
-            'person_yolov8n-seg.pt',
-            'person_yolov8s-seg.pt',
-            'mediapipe_face_full',
-            'mediapipe_face_short',
-            'mediapipe_face_mesh',
-            'mediapipe_face_mesh_eyes_only',
-        ]
+        # Model Select (fetched from API, cached 60s like other getters)
+        models = []
+        try:
+            getter = getattr(self.api, 'get_adetailer_models', None)
+            if callable(getter):
+                models = getter() or []
+        except Exception:
+            logger.warning('ADetailer model list fetch failed')
+            models = []
+        if not isinstance(models, list):
+            models = []
+        models = [m for m in models if isinstance(m, str) and m]
         self.model_select = QComboBox()
-        self.model_select.addItems(models)
-        self.model_select.setCurrentText(models[0])
+        if models:
+            self.model_select.addItems(models)
+            self.model_select.setCurrentText(models[0])
+        else:
+            self.model_select.addItem('None')
+            self.model_select.setCurrentText('None')
         # Inline styles removed for global QSS
         self.model_select.setMaxVisibleItems(5) # Suppose to limit the number of visible options
         self.model_select.setMinimumContentsLength(10) # Allows the box to be smaller than the longest item's char length
