@@ -26,6 +26,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_ENTRIES = [
     "forge/",
     "forge.desktop",
+    "LICENSE",
 ]
 
 # Directories to exclude from the forge/ folder
@@ -147,6 +148,12 @@ def create_package(
             zf.write(desktop_file, "forge.desktop")
             print(f"  + forge.desktop")
 
+        # Add LICENSE at the root level
+        license_file = PROJECT_ROOT / "LICENSE"
+        if license_file.exists():
+            zf.write(license_file, "LICENSE")
+            print(f"  + LICENSE")
+
         # Add forge/ directory recursively
         forge_files = _collect_forge_files()
         for file_rel in forge_files:
@@ -161,7 +168,7 @@ def create_package(
         print(f"Size: {total_size:,} bytes ({total_size / 1024:.1f} KB)")
 
         # List contents
-        print(f"\nContents ({len(forge_files) + 1} files):")
+        print(f"\nContents ({len(zf.infolist())} files):")
         for info in sorted(zf.infolist(), key=lambda i: i.filename):
             print(f"  {info.filename}")
 
