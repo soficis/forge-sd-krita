@@ -242,6 +242,11 @@ def _deep_merge_with_schema(
             continue
 
         if _value_matches_type(value=incoming_value, expected=default_value):
+            # Legacy user files persisted float settings as ints; coerce back so
+            # set() validates against a float schema. Narrow on purpose: only
+            # int -> float for float defaults, never any other combination.
+            if type(default_value) is float and type(incoming_value) is int:
+                incoming_value = float(incoming_value)
             merged[key] = incoming_value
 
     return merged

@@ -14,7 +14,7 @@
         "enable_refiner": false,
         "refiner_start": 0.8,
         "face_restorer": "",
-        "cfg_scale": 7,
+        "cfg_scale": 7.0,
         "denoise_strength": 0.7,
         "color_correction": true,
         "match_colors": false,
