@@ -21,7 +21,7 @@ def build_api_payload(data: Mapping[str, Any]) -> dict[str, Any]:
     payload["override_settings"] = override_settings
 
     _move_to_override(payload, "model", "sd_model_checkpoint")
-    _move_to_override(payload, "vae", "sd_vae")
+    _map_vae_field(payload)
     _move_to_override(payload, "color_correction", "img2img_color_correction")
     _move_to_override(payload, "forge_preset", "forge_preset")
     _move_to_override(payload, "forge_additional_modules", "forge_additional_modules")
@@ -83,6 +83,21 @@ def _map_refiner_fields(payload: dict[str, Any]) -> None:
         payload["refiner_checkpoint"] = refiner_name
     if refiner_start is not None:
         payload["refiner_switch_at"] = refiner_start
+
+
+def _map_vae_field(payload: dict[str, Any]) -> None:
+    vae_name = payload.pop("vae", None)
+
+    # Forge treats any provided sd_vae as a literal filename, so UI sentinels
+    # ("Automatic"/"None") must be dropped: omitting sd_vae means checkpoint VAE.
+    has_vae = (
+        isinstance(vae_name, str)
+        and bool(vae_name.strip())
+        and vae_name.strip().lower() not in ("automatic", "none")
+    )
+
+    if has_vae:
+        payload["override_settings"]["sd_vae"] = vae_name
 
 
 def _detect_family(data: dict[str, Any], override_settings: dict[str, Any]) -> ModelFamily:

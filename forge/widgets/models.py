@@ -61,7 +61,14 @@ class ModelsWidget(QWidget):
             self.variables['model'] = settings_model
 
         # VAE
-        self.vaes, self.variables['vae'] = self.api.get_vaes_and_default()
+        self.vaes, default_vae = self.api.get_vaes_and_default()
+        if default_vae in self.vaes:
+            self.variables['vae'] = default_vae
+        else:
+            # Backend default (e.g. the "Automatic" sentinel) is not a
+            # selectable item; hold the combo's no-VAE state instead so the
+            # widget and the payload cannot disagree.
+            self.variables['vae'] = 'None'
         settings_vae = self.settings_controller.get('defaults.vae')
         if settings_vae is not None and len(settings_vae) > 0 and settings_vae in self.vaes:
             self.variables['vae'] = settings_vae
