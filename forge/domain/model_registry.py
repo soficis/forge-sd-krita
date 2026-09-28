@@ -275,3 +275,27 @@ def should_hide_negative_prompt(model_name: str) -> bool:
 def should_hide_styles(model_name: str) -> bool:
     """Styles-selector visibility for a checkpoint name."""
     return get_model_config(detect_model_family(model_name)).hide_styles
+
+
+# Distilled checkpoints finish in a handful of steps and cannot rebuild
+# structure once img2img/inpaint has discarded most of the latent.
+DISTILLED_DENOISE_CAP = 0.5
+
+# Conservative markers only: a false positive silently caps a user's denoise.
+_DISTILLED_NAME_TOKENS = ("turbo", "klein", "schnell")
+
+
+def max_denoise_for_model(model_name: str) -> float:
+    """Upper bound for denoise strength. Distilled models melt above ~0.5.
+
+    Centralized like should_hide_negative_prompt so widgets never hardcode
+    family checks themselves. 1.0 = no cap for regular checkpoints.
+    """
+    if not isinstance(model_name, str) or not model_name:
+        return 1.0
+    name_lower = model_name.lower()
+    if detect_model_family(name_lower) in (ModelFamily.FLUX2, ModelFamily.ZIMAGE):
+        return DISTILLED_DENOISE_CAP
+    if any(token in name_lower for token in _DISTILLED_NAME_TOKENS):
+        return DISTILLED_DENOISE_CAP
+    return 1.0

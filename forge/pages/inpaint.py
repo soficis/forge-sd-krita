@@ -55,6 +55,7 @@ class InpaintPage(QWidget):
         self.cfg_widget = CFGWidget(self.settings_controller, self.api)
         self.model_widget.register_model_changed_signal(self.prompt_widget.update_for_model)
         self.model_widget.register_model_changed_signal(self.cfg_widget.update_for_model)
+        self.model_widget.register_model_changed_signal(self.denoise_widget.update_for_model)
         self.model_widget.register_architecture_changed_signal(self._on_architecture_changed)
 
         if not self.settings_controller.get('hide_ui.cfg'):

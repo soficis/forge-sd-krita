@@ -1,3 +1,4 @@
+from ..domain.model_registry import max_denoise_for_model
 from ..qt_compat import QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget, Qt
 from ..settings_controller import SettingsController
 
@@ -30,6 +31,20 @@ class DenoiseWidget(QWidget):
 
         denoise_row.layout().addWidget(self.denoise_percent)
         self.layout().addWidget(denoise_row)
+
+    def update_for_model(self, model_name: str) -> None:
+        """Cap the slider for distilled/turbo checkpoints; 1.0 = no cap."""
+        ceiling = max_denoise_for_model(model_name)
+        self.denoise_slider.setMaximum(int(ceiling * 100))
+        # setMaximum clamps the live value; re-read it so the label can't drift.
+        self.denoise_percent.setText('%s%%' % self.denoise_slider.value())
+        if ceiling < 1.0:
+            self.denoise_slider.setToolTip(
+                'Distilled/turbo models finish in very few steps and melt '
+                'above %s%% denoise. Capped at %s%% for this model.'
+                % (int(ceiling * 100), int(ceiling * 100)))
+        else:
+            self.denoise_slider.setToolTip('')
 
     def save_settings(self):
         denoise = self.denoise_slider.value() / 100
