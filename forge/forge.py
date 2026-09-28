@@ -28,6 +28,7 @@ from .pages import (
     UpscalePage,
 )
 from .settings_controller import SettingsController
+from .widgets.no_wheel import install_no_wheel
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +125,9 @@ class ForgeDocker(DockWidget):
         self.main_widget.setLayout(main_layout)
 
         self.change_page()
+
+        # Wheel over a combo must scroll the docker, not change the setting.
+        install_no_wheel(self.main_widget)
 
     def canvasChanged(self, canvas) -> None:
         return
