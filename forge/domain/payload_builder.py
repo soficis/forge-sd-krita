@@ -36,6 +36,7 @@ def build_api_payload(data: Mapping[str, Any]) -> dict[str, Any]:
     _rename_key(payload, "batch_count", "n_iter")
 
     _map_refiner_fields(payload)
+    _map_hr_additional_modules(payload)
 
     payload["override_settings_restore_afterwards"] = False
 
@@ -98,6 +99,16 @@ def _map_vae_field(payload: dict[str, Any]) -> None:
 
     if has_vae:
         payload["override_settings"]["sd_vae"] = vae_name
+
+
+def _map_hr_additional_modules(payload: dict[str, Any]) -> None:
+    # Backend processing.py:1404 tests `"Use same choices" not in <value>` on
+    # every txt2img request; an omitted key defaults to None and crashes the
+    # backend, so only a deliberately supplied non-empty list is passed through.
+    value = payload.get("hr_additional_modules")
+    if isinstance(value, list) and value:
+        return
+    payload["hr_additional_modules"] = ["Use same choices"]
 
 
 def _detect_family(data: dict[str, Any], override_settings: dict[str, Any]) -> ModelFamily:
