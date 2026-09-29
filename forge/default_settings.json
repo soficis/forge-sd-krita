@@ -114,7 +114,7 @@
         "tiled": false,
         "negative_prompt": false,
         "prompt_presets": false,
-        "styles": false,
+        "styles": true,
         "extra_networks": false,
         "cfg": false,
         "clip_skip": false,
