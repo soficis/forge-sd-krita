@@ -88,10 +88,10 @@
         "enabled": false,
         "schedule_bias": 1.0,
         "preservation_strength": 0.5,
-        "transition_contrast_boost": 4,
-        "mask_influence": 0,
+        "transition_contrast_boost": 4.0,
+        "mask_influence": 0.0,
         "difference_threshold": 0.5,
-        "difference_contrast": 2
+        "difference_contrast": 2.0
     },
     "upscale": {
         "tab": 0,
