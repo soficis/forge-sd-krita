@@ -146,11 +146,11 @@ def _apply_model_overrides(
         if modules:
             payload["override_settings"]["forge_additional_modules"] = modules
 
-    # Only set sampler/scheduler/cfg if user hasn't explicitly provided them
+    # Only set sampler/cfg if user hasn't explicitly provided them.
+    # Deliberately no scheduler default: Forge Neo owns the per-preset
+    # scheduler (its /sdapi/v1/options defaults); injecting one overrides it.
     if "sampler_name" not in payload:
         payload["sampler_name"] = config.default_sampler
-    if "scheduler" not in payload:
-        payload["scheduler"] = config.default_scheduler
     if "cfg_scale" not in payload:
         if config.cfg_fixed is not None:
             payload["cfg_scale"] = config.cfg_fixed

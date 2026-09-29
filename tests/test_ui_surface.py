@@ -536,7 +536,7 @@ class TestPayloadGaps:
         result = build_api_payload({"model": "z-image-turbo", "cfg_scale": 7})
         assert result["cfg_scale"] == 1.0
         assert result["override_settings"]["forge_preset"] == "zit"
-        assert result["scheduler"] == "Beta"
+        assert "scheduler" not in result
 
     def test_zimage_shift_applied(self):
         result = build_api_payload({"model": "z-image-turbo"})
@@ -546,7 +546,7 @@ class TestPayloadGaps:
         result = build_api_payload({"model": "wai-anima-v1"})
         assert result["override_settings"]["forge_preset"] == "anima"
         assert result["sampler_name"] == "ER SDE"
-        assert result["scheduler"] == "Beta"
+        assert "scheduler" not in result
         assert result["shift"] == 3.0
 
     def test_krea2_cfg_defaults_and_user_preserved(self):

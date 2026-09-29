@@ -231,7 +231,7 @@ class TestFluxModel:
         result = build_api_payload({"model": "flux-dev-fp16"})
         assert result["override_settings"]["forge_preset"] == "flux"
         assert result["cfg_scale"] == 1
-        assert result["scheduler"] == "Simple"
+        assert "scheduler" not in result
 
     def test_flux_model_mixed_case(self):
         result = build_api_payload({"model": "FLUX-Dev"})
@@ -261,9 +261,9 @@ class TestFluxModel:
 
     def test_non_flux_model_no_flux_overrides(self):
         result = build_api_payload({"model": "dreamshaper"})
-        # dreamshaper -> SD family -> cfg_scale from config (7.0), scheduler from config (Automatic)
+        # dreamshaper -> SD family -> cfg_scale from config (7.0); no scheduler key (backend owns its per-preset default)
         assert result.get("cfg_scale") == 7.0
-        assert result.get("scheduler") == "Automatic"
+        assert "scheduler" not in result
 
     def test_flux_model_non_string_checkpoint(self):
         """Non-string checkpoint should fall back to SD defaults."""
