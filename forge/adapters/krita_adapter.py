@@ -541,37 +541,46 @@ class KritaAdapter:
         if action is not None:
             action.trigger()
 
+    @staticmethod
+    def _fill_node(node, rgba: tuple[int, int, int, int]) -> None:
+        """Write a repeating 4-byte BGRA pattern across the node's bounds."""
+        bounds = node.bounds()
+        x, y = bounds.x(), bounds.y()
+        w, h = bounds.width(), bounds.height()
+        if w > 0 and h > 0:
+            # Format_ARGB32 stores pixels as BGRA bytes
+            node.setPixelData(QByteArray(bytes(rgba) * (w * h)), x, y, w, h)
+
     def get_mask_opacity(self, layer=None) -> float:
         """Return opacity of the given layer (0.0–1.0). Uses active node if None."""
         document = self._ensure_document()
         node = layer if layer is not None else document.activeNode()
-        return node.opacity()
+        value = node.opacity()
+        # pykrita returns int 0-255; a binding already returning 0.0-1.0 passes through
+        return value / 255.0 if isinstance(value, int) else float(value)
 
     def set_mask_opacity(self, opacity: float, layer=None) -> None:
         """Set opacity on the given layer (0.0–1.0). Uses active node if None."""
         document = self._ensure_document()
         node = layer if layer is not None else document.activeNode()
-        node.setOpacity(opacity)
+        # pykrita's setOpacity takes int 0-255, not the documented 0.0-1.0
+        node.setOpacity(int(round(opacity * 255)))
         document.refreshProjection()
 
     def clear_mask_layer(self, layer=None) -> None:
         """Clear the layer to fully transparent. Uses active node if None."""
         document = self._ensure_document()
         node = layer if layer is not None else document.activeNode()
-        node.clear()
+        # Node has no clear(); all-0x00 = fully transparent (fill's mirror)
+        self._fill_node(node, (0, 0, 0, 0))
         document.refreshProjection()
 
     def fill_mask_layer(self, layer=None) -> None:
         """Fill the layer with fully opaque white pixels. Uses active node if None."""
         document = self._ensure_document()
         node = layer if layer is not None else document.activeNode()
-        bounds = node.bounds()
-        x, y = bounds.x(), bounds.y()
-        w, h = bounds.width(), bounds.height()
-        if w > 0 and h > 0:
-            # Format_ARGB32 stores pixels as BGRA bytes; all-0xFF = opaque white
-            pixel_data = QByteArray(bytes([255, 255, 255, 255] * (w * h)))
-            node.setPixelData(pixel_data, x, y, w, h)
+        # all-0xFF = opaque white
+        self._fill_node(node, (255, 255, 255, 255))
         document.refreshProjection()
 
     def get_active_brush_size(self) -> int:
