@@ -64,6 +64,7 @@ class SDAPI:
         self.models: list[dict[str, Any]] = []
         self.vaes: list[dict[str, Any]] = []
         self.samplers: list[dict[str, Any]] = []
+        self.schedulers: list[dict[str, Any]] = []
         self.upscalers: list[dict[str, Any]] = []
         self.facerestorers: list[dict[str, Any]] = []
         self.styles: list[dict[str, Any]] = []
@@ -77,6 +78,9 @@ class SDAPI:
         self.default_settings: dict[str, Any] = {}
         self.defaults = {
             "sampler": "",
+            # "" = the backend owns the per-preset scheduler default;
+            # never read from options (the top-level scheduler key is null).
+            "scheduler": "",
             "model": "",
             "vae": "",
             "upscaler": "",
@@ -152,6 +156,7 @@ class SDAPI:
             self.get_models,
             self.get_vaes,
             self.get_samplers,
+            self.get_schedulers,
             self.get_upscalers,
             self.get_facerestorers,
             self.get_styles,
@@ -369,6 +374,19 @@ class SDAPI:
             return self.samplers
         return self._get_cached("samplers", _fetch)
 
+    def get_schedulers(self) -> list[dict[str, Any]]:
+        def _fetch():
+            # Never raise: this runs during widget construction, so a dead
+            # backend must degrade to [] (request guard as in get_adetailer_models).
+            try:
+                schedulers = self.get("/sdapi/v1/schedulers")
+            except Exception:
+                logger.warning("get_schedulers: request failed")
+                schedulers = None
+            self.schedulers = schedulers if isinstance(schedulers, list) else []
+            return self.schedulers
+        return self._get_cached("schedulers", _fetch)
+
     def get_upscalers(self) -> list[dict[str, Any]]:
         def _fetch():
             upscalers = self.get("/sdapi/v1/upscalers")
@@ -506,6 +524,14 @@ class SDAPI:
             return [], "None"
         names = [_safe_name(sampler, "name") for sampler in self.samplers]
         return names, self.defaults["sampler"]
+
+    def get_schedulers_and_default(self) -> tuple[list[str], str]:
+        # The default side is always "": Forge Neo owns the per-preset
+        # scheduler, so "" tells the widget to send no scheduler key.
+        if not self.connected:
+            return [], ""
+        labels = [_safe_name(scheduler, "label") for scheduler in self.schedulers]
+        return labels, self.defaults["scheduler"]
 
     def get_models_and_default(self) -> tuple[list[str], str]:
         if not self.connected:

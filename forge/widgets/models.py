@@ -11,6 +11,17 @@ MODELS_LOADING_TEXT = "Loading models..."
 MODELS_DISCONNECTED_TEXT = "Not connected - open Settings to connect"
 MODELS_EMPTY_TEXT = "No models found on the backend"
 
+SCHEDULER_BACKEND_DEFAULT_LABEL = "Automatic (backend default)"
+
+
+def is_selectable_scheduler(value, schedulers) -> bool:
+    """True only for a label the backend advertised.
+
+    The sentinel text, '', absent and garbage values all mean "let Forge Neo
+    apply its own per-preset default" and must never reach the payload.
+    """
+    return isinstance(value, str) and bool(value) and value in schedulers
+
 
 def models_status_message(loading: bool, connected: bool, model_count: int) -> str:
     """Placeholder text for the model dropdown; '' once models are listed."""
@@ -40,11 +51,13 @@ class ModelsWidget(QWidget):
             'refiner_start': self.settings_controller.get('defaults.refiner_start'),
             'sampler': '',
             'sampling_steps': self.settings_controller.get('defaults.sampling_steps'),
+            'scheduler': '',
         }
         self.models = []
         self.vaes = []
         self.refiners = []
         self.samplers = []
+        self.schedulers = []
         self.model_changed_signals = []
         self.architecture_changed_signals = []
         self.architecture = ModelFamily.SD  # default architecture
@@ -84,6 +97,23 @@ class ModelsWidget(QWidget):
         settings_sampler = self.settings_controller.get('defaults.sampler')
         if settings_sampler is not None and len(settings_sampler) > 0 and settings_sampler in self.samplers:
             self.variables['sampler'] = settings_sampler
+
+        # Scheduler: only a backend-advertised label is selectable; '' from
+        # the adapter means the backend owns the default, so the widget holds
+        # the sentinel label and the payload carries no scheduler key.
+        schedulers_result = self.api.get_schedulers_and_default()
+        if isinstance(schedulers_result, tuple) and len(schedulers_result) == 2:
+            self.schedulers, scheduler_default = schedulers_result
+        else:
+            self.schedulers, scheduler_default = [], ""
+        self.variables['scheduler'] = (
+            scheduler_default
+            if is_selectable_scheduler(scheduler_default, self.schedulers)
+            else SCHEDULER_BACKEND_DEFAULT_LABEL
+        )
+        settings_scheduler = self.settings_controller.get('defaults.scheduler')
+        if settings_scheduler is not None and len(settings_scheduler) > 0 and settings_scheduler in self.schedulers:
+            self.variables['scheduler'] = settings_scheduler
 
         # Steps
         self.variables['sampling_steps'] = self.settings_controller.get('defaults.sampling_steps')
@@ -186,6 +216,10 @@ class ModelsWidget(QWidget):
         if self.ignore_hidden or not self.settings_controller.get('hide_ui.sampler'):
             select_form.layout().addRow('Sampler', self._sampler_settings())
 
+        # Scheduler
+        if self.ignore_hidden or not self.settings_controller.get('hide_ui.scheduler'):
+            select_form.layout().addRow('Scheduler', self._scheduler_settings())
+
         self.layout().addWidget(select_form)
 
     def update_slider(self, value):
@@ -227,6 +261,24 @@ class ModelsWidget(QWidget):
         sampler_row.layout().addWidget(self.sampling_steps)
 
         return sampler_row
+
+    def _scheduler_settings(self):
+        self.scheduler_box = QComboBox()
+        # First entry is the sentinel: selecting it sends NO scheduler key.
+        self.scheduler_box.addItems([SCHEDULER_BACKEND_DEFAULT_LABEL, *self.schedulers])
+        self.scheduler_box.setCurrentText(self.variables['scheduler'])
+        self.scheduler_box.setMinimumContentsLength(10) # Allows the box to be smaller than the longest item's char length
+        # Inline styles removed for global QSS
+        self.scheduler_box.setMaxVisibleItems(10) # Suppose to limit the number of visible options
+        settings_scheduler = self.settings_controller.get('defaults.scheduler')
+        if settings_scheduler is not None and len(settings_scheduler) > 0 and settings_scheduler in self.schedulers:
+            self.scheduler_box.setCurrentText(settings_scheduler)
+        else:
+            self.settings_controller.set('defaults.scheduler', self.variables['scheduler'])
+        # Send the changed scheduler to the settings. It'll get saved when the generate button is clicked
+        self.scheduler_box.currentTextChanged.connect(lambda: self._update_variables('scheduler', self.scheduler_box.currentText()))
+        self.scheduler_box.setToolTip('Schedule type')
+        return self.scheduler_box
     
     def _update_variables(self, key, value):
         self.variables[key] = value
@@ -289,6 +341,20 @@ class ModelsWidget(QWidget):
                         box.setCurrentText(sampler_name)
                 except AttributeError:
                     pass
+        scheduler_value = data.get("scheduler")
+        if is_selectable_scheduler(scheduler_value, getattr(self, 'schedulers', [])):
+            restored_scheduler = copy.deepcopy(scheduler_value)
+        else:
+            # Absent/empty = that generation used the backend default;
+            # unknown values must never be replayed - degrade to the sentinel.
+            restored_scheduler = SCHEDULER_BACKEND_DEFAULT_LABEL
+        self._update_variables('scheduler', restored_scheduler)
+        box = getattr(self, 'scheduler_box', None)
+        if box is not None:
+            try:
+                box.setCurrentText(restored_scheduler)
+            except AttributeError:
+                pass
         steps = data.get("sampling_steps", data.get("steps"))
         if steps is not None:
             try:
@@ -347,6 +413,7 @@ class ModelsWidget(QWidget):
         self.settings_controller.set('defaults.model', self.variables['model'])
         self.settings_controller.set('defaults.vae', self.variables['vae'])
         self.settings_controller.set('defaults.sampler', self.variables['sampler'])
+        self.settings_controller.set('defaults.scheduler', self.variables.get('scheduler', ''))
         self.settings_controller.set('defaults.sampling_steps', self.variables['sampling_steps'])
         self.settings_controller.set('defaults.enable_refiner', self.variables['enable_refiner'])
         self.settings_controller.set('defaults.refiner', self.variables['refiner'])
@@ -357,6 +424,10 @@ class ModelsWidget(QWidget):
         self.save_settings()
         self.settings_controller.save()
         data = {**self.variables}
+        if not is_selectable_scheduler(data.get('scheduler'), getattr(self, 'schedulers', [])):
+            # No scheduler key at all is what lets Forge Neo apply its own
+            # per-preset default (sd/xl=Automatic, flux=Beta, krea=Simple).
+            data.pop('scheduler', None)
         if not data['enable_refiner']:
             # Remove the refiner stuff if it's not enabled
             # data['refiner'] = 'none'

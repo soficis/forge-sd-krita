@@ -6,6 +6,7 @@
     },
     "defaults": {
         "sampler": "",
+        "scheduler": "",
         "sampling_steps": 20,
         "model": "",
         "vae": "",
@@ -107,6 +108,7 @@
         "refiner": false,
         "vae": false,
         "sampler": false,
+        "scheduler": false,
         "seed": false,
         "batch": false,
         "tiled": false,
