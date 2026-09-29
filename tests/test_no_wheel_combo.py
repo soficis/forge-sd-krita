@@ -1,20 +1,24 @@
-"""Failing-first: mousewheel over a QComboBox must NOT change its value.
+"""Failing-first: mousewheel over a value widget must NOT change its value.
 
-User-reported bug: scrolling the docker wheel-steps the combo under the
-cursor (QComboBox::wheelEvent mutates currentIndex), silently changing
-model/sampler/VAE/upscaler/style settings while the page scrolls.
+User-reported bugs: scrolling the docker wheel-steps the combo under the
+cursor (QComboBox::wheelEvent mutates currentIndex), and after the combo
+fix still wheel-steps sliders and spin boxes (QSlider and QAbstractSpinBox
+wheel handlers step the value) - silently changing sampler steps, CFG
+scale, refiner start, denoise strength and soft-inpainting settings while
+the page scrolls.
 
 conftest's Qt layer is MagicMock-based (subclassing it yields mocks, not
 classes), so this file loads forge/widgets/no_wheel.py fresh under its own
 stub-Qt layer of REAL classes (pattern: tests/test_controlnet_dict_guards.py).
-The stub QComboBox models Qt's wheel handling - a delivered wheel steps
-currentIndex and is accepted - so "value unchanged" proves the filter really
-blocked delivery rather than the stub quietly ignoring wheel events.
+The stubs model Qt's wheel handling - a delivered wheel steps the value and
+is accepted - so "value unchanged" proves the filter really blocked delivery
+rather than the stub quietly ignoring wheel events.
 
 Assertions are behavioural: after the filter is installed, a wheel delivered
-to the combo leaves the value unchanged AND the event unaccepted (Qt's wheel
-loop only hops to the parent scroll area while the event stays unaccepted);
-programmatic setters keep working; non-wheel events are not swallowed.
+to a combo/slider/spin box leaves the value unchanged AND the event
+unaccepted (Qt's wheel loop only hops to the parent scroll area while the
+event stays unaccepted); programmatic setters keep working; non-wheel
+events are not swallowed.
 """
 
 from __future__ import annotations
@@ -153,11 +157,93 @@ class QComboBox(QObject):
         return False
 
 
+class QAbstractSpinBox(QObject):
+    """Stub spin-box base whose event() mirrors QAbstractSpinBox::wheelEvent
+    (steps the value and accepts) - the bug behind QSpinBox/QDoubleSpinBox
+    (steps, CFG scale, batch count, mask blur, ...)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._value = 0
+        self.handled = []  # event types that actually reached event()
+
+    def value(self):
+        return self._value
+
+    def setValue(self, value):
+        self._value = value
+
+    def event(self, event):
+        etype = event.type()
+        self.handled.append(etype)
+        if etype == QEvent.Type.Wheel:
+            self._value += 1  # singleStep=1, as QSpinBox does per notch
+            event.accept()
+            return True
+        if etype in (QEvent.Type.KeyPress, QEvent.Type.MouseButtonPress):
+            event.accept()
+            return True
+        return False
+
+
+class QSpinBox(QAbstractSpinBox):
+    """Integer spin box - a QAbstractSpinBox subclass in Qt too."""
+
+
+class QDoubleSpinBox(QAbstractSpinBox):
+    """Float spin box - a QAbstractSpinBox subclass in Qt too."""
+
+
+class QSlider(QObject):
+    """Stub slider whose event() mirrors QSlider::wheelEvent: the wheel steps
+    the position and is accepted. QSlider derives from QAbstractSlider, NOT
+    QAbstractSpinBox (verified against real Qt6), so it needs its own entry."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._value = 0
+        self.handled = []  # event types that actually reached event()
+
+    def value(self):
+        return self._value
+
+    def setValue(self, value):
+        self._value = value
+
+    def event(self, event):
+        etype = event.type()
+        self.handled.append(etype)
+        if etype == QEvent.Type.Wheel:
+            self._value += 1  # singleStep per notch, as QSlider does
+            event.accept()
+            return True
+        if etype in (QEvent.Type.KeyPress, QEvent.Type.MouseButtonPress):
+            event.accept()
+            return True
+        return False
+
+
+class QScrollArea(QObject):
+    """Stub scroll area whose event() consumes the wheel (models the docker's
+    QScrollArea actually scrolling when an unaccepted wheel bubbles up)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.wheels_scrolled = 0
+
+    def event(self, event):
+        if event.type() == QEvent.Type.Wheel:
+            self.wheels_scrolled += 1
+            event.accept()
+            return True
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Load the module under test fresh (real classes, not conftest's mocks)
 # ---------------------------------------------------------------------------
 
-_STUB_NAMES = ("QComboBox", "QEvent", "QObject")
+_STUB_NAMES = ("QComboBox", "QEvent", "QObject", "QAbstractSpinBox", "QSlider")
 
 
 def _load_no_wheel():
@@ -211,6 +297,11 @@ def _combo_with_filter():
     return combo, flt
 
 
+def _filtered(widget):
+    nw_mod.install_no_wheel(widget)
+    return widget
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -226,6 +317,32 @@ class TestHarnessModelsTheBug:
 
         assert combo.currentIndex() == 1  # wheel stepped the value...
         assert consumed is True  # ...and the combo ate the event
+
+    def test_unfiltered_wheel_steps_spin_box_value_and_is_consumed(self):
+        """Honesty check for spin boxes: QAbstractSpinBox::wheelEvent steps
+        value per notch, so an unfiltered stub must reproduce that or the
+        spin-box assertions below would pass on a no-op filter."""
+        for box in (QSpinBox(), QDoubleSpinBox()):
+            box.setValue(50)
+            wheel = QEvent(QEvent.Type.Wheel)
+
+            consumed = box.deliver(wheel)
+
+            assert box.value() == 51, type(box).__name__
+            assert consumed is True, type(box).__name__
+
+    def test_unfiltered_wheel_steps_slider_value_and_is_consumed(self):
+        """Honesty check for sliders: QSlider::wheelEvent steps the value per
+        notch (real Qt6 verified: 50 -> 53), so an unfiltered stub must
+        reproduce that or the slider assertions would pass on a no-op filter."""
+        slider = QSlider()
+        slider.setValue(50)
+        wheel = QEvent(QEvent.Type.Wheel)
+
+        consumed = slider.deliver(wheel)
+
+        assert slider.value() == 51
+        assert consumed is True
 
 
 class TestNoWheelFilter:
@@ -329,3 +446,136 @@ class TestNoWheelFilter:
         assert late_combo.currentIndex() == 0
         assert consumed is False
         assert QEvent.Type.Wheel not in late_combo.handled
+
+
+class TestNoWheelFilterSpinAndSlider:
+    @staticmethod
+    def _assert_blocked(widget, value_of):
+        wheel = QEvent(QEvent.Type.Wheel)
+
+        consumed = widget.deliver(wheel)
+
+        assert value_of() == 0, "wheel must not have stepped the value"
+        assert consumed is False, (
+            "event must stay unaccepted so the wheel propagates to the "
+            "parent scroll area"
+        )
+        assert QEvent.Type.Wheel not in widget.handled, (
+            f"{type(widget).__name__} itself must never receive the wheel"
+        )
+
+    def test_wheel_over_spin_box_leaves_value_unchanged_and_unconsumed(self):
+        box = _filtered(QSpinBox())
+        self._assert_blocked(box, box.value)
+
+    def test_wheel_over_double_spin_box_leaves_value_unchanged_and_unconsumed(
+        self,
+    ):
+        box = _filtered(QDoubleSpinBox())
+        box.setValue(5.0)
+
+        wheel = QEvent(QEvent.Type.Wheel)
+        consumed = box.deliver(wheel)
+
+        assert box.value() == 5.0
+        assert consumed is False
+        assert QEvent.Type.Wheel not in box.handled
+
+    def test_wheel_over_slider_leaves_value_unchanged_and_unconsumed(self):
+        slider = _filtered(QSlider())
+        slider.setValue(70)
+
+        wheel = QEvent(QEvent.Type.Wheel)
+        consumed = slider.deliver(wheel)
+
+        assert slider.value() == 70
+        assert consumed is False
+        assert QEvent.Type.Wheel not in slider.handled
+
+    def test_repeated_wheel_does_not_walk_spin_box_or_slider_values(self):
+        for widget, initial in ((_filtered(QSpinBox()), 0),
+                                (_filtered(QSlider()), 0)):
+            for _ in range(5):
+                widget.deliver(QEvent(QEvent.Type.Wheel))
+            assert widget.value() == initial, type(widget).__name__
+
+    def test_programmatic_setters_still_work_after_install(self):
+        box = _filtered(QSpinBox())
+        assert box.value() == 0
+        box.setValue(42)
+        assert box.value() == 42
+
+        slider = _filtered(QSlider())
+        slider.setValue(70)
+        assert slider.value() == 70
+
+    def test_key_events_reach_the_spin_box(self):
+        box = _filtered(QSpinBox())
+        flt = box._filters[0]
+        key = QEvent(QEvent.Type.KeyPress)
+
+        assert flt.eventFilter(box, key) is False
+        box.deliver(key)
+        assert QEvent.Type.KeyPress in box.handled
+
+    def test_enclosing_scroll_area_still_receives_the_wheel(self):
+        """The guard must not swallow scrolling: a blocked (unaccepted) wheel
+        bubbles to the parent QScrollArea, which scrolls the docker page."""
+        scroll = QScrollArea()
+        box = QSpinBox(scroll)
+        _filtered(scroll)
+
+        consumed = box.deliver(QEvent(QEvent.Type.Wheel))
+
+        assert box.value() == 0
+        assert consumed is False, "unaccepted wheel must bubble to the parent"
+        # Qt's notify loop hops to the parent while unaccepted: model that.
+        if not consumed:
+            scroll.deliver(QEvent(QEvent.Type.Wheel))
+        assert scroll.wheels_scrolled == 1, "the scroll area must still scroll"
+
+    def test_text_edit_wheels_are_not_filtered(self):
+        """Prompt/QPlainTextEdit wheels must keep scrolling content - only
+        value widgets are guarded. A plain QObject stands in: the filter's
+        isinstance check must not match non-value widgets."""
+        widget = QObject()
+        flt = nw_mod.install_no_wheel(widget)
+        wheel = QEvent(QEvent.Type.Wheel)
+
+        assert flt.eventFilter(widget, wheel) is False
+
+    def test_spin_boxes_and_sliders_created_after_install_are_covered(self):
+        """Dynamic pages/units build value widgets after construction: the
+        ChildAdded cascade must extend coverage to them too."""
+        root = QObject()
+        flt = nw_mod.install_no_wheel(root)
+
+        panel = QObject()
+        late_box = QSpinBox(panel)
+        late_slider = QSlider(panel)
+        added = QChildEvent(QEvent.Type.ChildAdded, panel)
+        assert flt.eventFilter(root, added) is False
+        panel._parent = root
+        root._children.append(panel)
+
+        for widget in (late_box, late_slider):
+            consumed = widget.deliver(QEvent(QEvent.Type.Wheel))
+            assert widget.value() == 0, type(widget).__name__
+            assert consumed is False, type(widget).__name__
+            assert QEvent.Type.Wheel not in widget.handled, type(widget).__name__
+
+    def test_install_walks_subtree_covering_spin_boxes_and_sliders(self):
+        root = QObject()
+        mid = QObject(root)
+        deep_box = QSpinBox(mid)
+        top_slider = QSlider(root)
+        outside_box = QSpinBox()
+
+        flt = nw_mod.install_no_wheel(root)
+
+        assert flt in deep_box._filters
+        assert flt in top_slider._filters
+        assert flt not in outside_box._filters
+
+        outside_box.deliver(QEvent(QEvent.Type.Wheel))
+        assert outside_box.value() == 1

@@ -1,22 +1,30 @@
-"""QComboBox::wheelEvent steps currentIndex on each wheel tick, so scrolling a
-docker page silently mutates the setting under the cursor. Block the wheel
-from reaching combos but leave it unaccepted so parents still scroll."""
+"""QComboBox::wheelEvent steps currentIndex, QAbstractSpinBox::wheelEvent and
+QSlider::wheelEvent step their value on each wheel tick, so scrolling a docker
+page silently mutates the setting under the cursor. Block the wheel from
+reaching those value widgets but leave it unaccepted so parents still scroll."""
 
 from __future__ import annotations
 
-from ..qt_compat import QComboBox, QEvent, QObject
+from ..qt_compat import QAbstractSpinBox, QComboBox, QEvent, QObject, QSlider
 
 _FILTER = None
+
+# Widgets whose wheelEvent mutates a setting; scrolling must not touch them.
+_WHEEL_STEPPERS = (
+    QComboBox,  # steps currentIndex: model/sampler/VAE/style pickers
+    QAbstractSpinBox,  # steps value: QSpinBox/QDoubleSpinBox (steps, CFG, batch)
+    QSlider,  # steps value; NOT a QAbstractSpinBox subclass (QAbstractSlider)
+)
 
 
 class NoWheelFilter(QObject):
     def eventFilter(self, obj, event):
         etype = event.type()
-        if etype == QEvent.Type.Wheel and isinstance(obj, QComboBox):
+        if etype == QEvent.Type.Wheel and isinstance(obj, _WHEEL_STEPPERS):
             event.ignore()
             return True
         if etype == QEvent.Type.ChildAdded:
-            # Pages/dynamic units build combos after construction; cascade.
+            # Pages/dynamic units build value widgets after construction; cascade.
             _install(event.child(), self)
         return False
 
