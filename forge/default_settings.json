@@ -135,9 +135,7 @@
         "inpaint_mask_mode": false,
         "inpaint_masked_content": false,
         "inpaint_area": false,
-        "soft_inpaint": false,
-        "interrogate_img2img": true,
-        "interrogate_model": false
+        "soft_inpaint": false
     },
     "controlnet": {
         "low_vram": false,
@@ -156,10 +154,5 @@
         "erode_size": 10,
         "foreground_threshold": 240,
         "background_threshold": 10
-    },
-    "interrogate": {
-        "model": "clip",
-        "prompt_mode": "img2img",
-        "caption_mode": "replace"
     }
 }

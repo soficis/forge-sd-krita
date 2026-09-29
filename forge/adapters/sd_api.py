@@ -188,7 +188,7 @@ class SDAPI:
 
         is_generation = any(
             kw in path
-            for kw in ("txt2img", "img2img", "extra-single-image", "interrogate")
+            for kw in ("txt2img", "img2img", "extra-single-image")
         )
         if is_generation:
             connect_timeout = self.gen_connect_timeout
@@ -634,17 +634,6 @@ class SDAPI:
         results = self.post("/sdapi/v1/extra-single-image", payload)
         if isinstance(results, dict):
             self.log_request_and_response(payload, results)
-            return results
-        return None
-
-    def interrogate(self, data: dict[str, Any]) -> dict[str, Any] | None:
-        if not isinstance(data, dict):
-            logger.warning("interrogate: non-dict input %r, refusing",
-                           type(data).__name__)
-            return None
-        results = self.post("/sdapi/v1/interrogate", data)
-        if isinstance(results, dict):
-            self.log_request_and_response(data, results)
             return results
         return None
 

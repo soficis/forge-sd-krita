@@ -1,10 +1,8 @@
-"""Task 18 (triage-approved widget/page TODOs): extensions fallback message,
-interrogate caption replace/append/prepend, simplify mask hide checkboxes,
-interrogate-model clip-failure hint + deepdanbooru info.
+"""Task 18 (triage-approved widget/page TODOs): extensions fallback message
+and simplify mask hide checkboxes.
 
-Failing-first: the pure helpers asserted here (visible_extensions,
-apply_caption_mode, deepdanbooru_available, CLIP_DOWNLOAD_HINT) do not exist
-pre-fix, and threadable_return unconditionally OVERWRITES the prompt.
+Failing-first: the pure helper asserted here (visible_extensions) did not
+exist pre-fix.
 """
 
 from __future__ import annotations
@@ -98,92 +96,6 @@ class TestExtensionWidgetMessage:
 
 
 # ---------------------------------------------------------------------------
-# interrogate.py:55 — replace / append / prepend caption mode
-# ---------------------------------------------------------------------------
-
-
-class TestApplyCaptionMode:
-    def test_replace(self):
-        from forge.widgets.interrogate import apply_caption_mode
-
-        assert apply_caption_mode("old prompt", "new caption", "replace") == "new caption"
-
-    def test_append(self):
-        from forge.widgets.interrogate import apply_caption_mode
-
-        assert apply_caption_mode("old prompt", "new caption", "append") == "old prompt, new caption"
-
-    def test_append_empty_existing(self):
-        from forge.widgets.interrogate import apply_caption_mode
-
-        assert apply_caption_mode("", "new caption", "append") == "new caption"
-
-    def test_prepend(self):
-        from forge.widgets.interrogate import apply_caption_mode
-
-        assert apply_caption_mode("old prompt", "new caption", "prepend") == "new caption, old prompt"
-
-    def test_prepend_empty_existing(self):
-        from forge.widgets.interrogate import apply_caption_mode
-
-        assert apply_caption_mode("", "new caption", "prepend") == "new caption"
-
-    def test_unknown_mode_falls_back_to_replace(self):
-        from forge.widgets.interrogate import apply_caption_mode
-
-        assert apply_caption_mode("old prompt", "new caption", "bogus") == "new caption"
-
-
-class TestCaptionModeThreadableReturn:
-    def _make_widget(self, tmp_path, caption_mode):
-        from forge.widgets.interrogate import InterrogateWidget
-
-        settings = _write_settings(
-            tmp_path,
-            {
-                "interrogate": {
-                    "model": "clip",
-                    "prompt_mode": "img2img",
-                    "caption_mode": caption_mode,
-                },
-                "hide_ui": {"hidden_extensions": []},
-            },
-        )
-        model_widget = MagicMock()
-        model_widget.get_prompt_mode.return_value = "img2img"
-        prompt_widget = MagicMock()
-        prompt_widget.prompt_text_edit.toPlainText.return_value = "old prompt"
-        widget = InterrogateWidget(
-            settings, MagicMock(), model_widget, prompt_widget, MagicMock()
-        )
-        return widget, prompt_widget
-
-    def test_append_preserves_user_prompt(self, tmp_path):
-        widget, prompt_widget = self._make_widget(tmp_path, "append")
-        widget.results = {"caption": "new caption"}
-        widget.threadable_return()
-        prompt_widget.prompt_text_edit.setPlainText.assert_called_once_with(
-            "old prompt, new caption"
-        )
-
-    def test_replace_overwrites(self, tmp_path):
-        widget, prompt_widget = self._make_widget(tmp_path, "replace")
-        widget.results = {"caption": "new caption"}
-        widget.threadable_return()
-        prompt_widget.prompt_text_edit.setPlainText.assert_called_once_with(
-            "new caption"
-        )
-
-    def test_prepend_puts_caption_first(self, tmp_path):
-        widget, prompt_widget = self._make_widget(tmp_path, "prepend")
-        widget.results = {"caption": "new caption"}
-        widget.threadable_return()
-        prompt_widget.prompt_text_edit.setPlainText.assert_called_once_with(
-            "new caption, old prompt"
-        )
-
-
-# ---------------------------------------------------------------------------
 # simplify.py:153 — Mask Blur / Mode / Content / Area hide checkboxes
 # ---------------------------------------------------------------------------
 
@@ -224,68 +136,3 @@ class TestSimplifyMaskHideKeys:
         reloaded = SettingsController(base_dir=tmp_path)
         for key in MASK_HIDE_KEYS:
             assert reloaded.get(f"hide_ui.{key}") is True
-
-
-# ---------------------------------------------------------------------------
-# interrogate_model.py:33 + :37 — clip-failure hint + deepdanbooru info
-# ---------------------------------------------------------------------------
-
-
-class TestInterrogateModelInfo:
-    def test_deepdanbooru_unavailable(self):
-        from forge.widgets.interrogate_model import deepdanbooru_available
-
-        api = MagicMock()
-        api.default_settings = {}
-        assert deepdanbooru_available(api) is False
-
-    def test_deepdanbooru_available(self):
-        from forge.widgets.interrogate_model import deepdanbooru_available
-
-        api = MagicMock()
-        api.default_settings = {"deepbooru_sort_alpha": {"key": "value"}}
-        assert deepdanbooru_available(api) is True
-
-    def test_clip_hint_present(self):
-        from forge.widgets.interrogate_model import CLIP_DOWNLOAD_HINT
-
-        assert "clip" in CLIP_DOWNLOAD_HINT.lower()
-        assert len(CLIP_DOWNLOAD_HINT) > 20
-
-    def test_widget_surfaces_deepdanbooru_info(self, tmp_path):
-        from forge.widgets.interrogate_model import InterrogateModelWidget
-
-        api = MagicMock()
-        api.default_settings = {}
-        settings = _write_settings(
-            tmp_path,
-            {
-                "interrogate": {"model": "clip", "prompt_mode": "img2img"},
-                "hide_ui": {"interrogate_model": False},
-            },
-        )
-        widget = InterrogateModelWidget(
-            settings, api, {"x": 0, "y": 0, "w": 0, "h": 0}
-        )
-        assert widget.deepdanbooru_available is False
-        assert "deepdanbooru" in widget.model_status_text.lower()
-
-    def test_widget_surfaces_clip_hint(self, tmp_path):
-        from forge.widgets.interrogate_model import (
-            CLIP_DOWNLOAD_HINT,
-            InterrogateModelWidget,
-        )
-
-        api = MagicMock()
-        api.default_settings = {}
-        settings = _write_settings(
-            tmp_path,
-            {
-                "interrogate": {"model": "clip", "prompt_mode": "img2img"},
-                "hide_ui": {"interrogate_model": False},
-            },
-        )
-        widget = InterrogateModelWidget(
-            settings, api, {"x": 0, "y": 0, "w": 0, "h": 0}
-        )
-        assert widget.clip_hint_text == CLIP_DOWNLOAD_HINT

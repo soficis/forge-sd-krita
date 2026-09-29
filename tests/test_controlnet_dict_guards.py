@@ -232,7 +232,6 @@ class TestSdApiDictGuards:
             assert api.txt2img(bad) is None
             assert api.img2img(bad) is None
             assert api.extra(bad) is None
-            assert api.interrogate(bad) is None
             assert api.tiled_generate(bad) is None
             m.assert_not_called()
 

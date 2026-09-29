@@ -13,8 +13,6 @@ from .batch import BatchWidget
 from .smart_size import SmartSizeWidget
 from .hires_fix import HiResFixWidget
 from .cfg import CFGWidget
-from .interrogate_model import InterrogateModelWidget
-from .interrogate import InterrogateWidget
 from .history import HistoryWidget
 from .tiled import TiledWidget
 from .prompt_presets import PromptPresetsWidget

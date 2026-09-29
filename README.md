@@ -110,7 +110,6 @@ The plugin inspects prompt text for turbo/distill LoRA tags and automatically ad
 
 ### Additional Tools & Extensions
 - **Upscale**: Single-image upscaling via `extra-single-image` endpoint (Lanczos, 4x-UltraSharp, 4x-AnimeSharp).
-- **Interrogate**: Image-to-prompt captioning using CLIP models.
 - **Remove Background**: RemBG integration with alpha matting and mask outputs.
 - **ControlNet & ADetailer**: Multi-unit ControlNet configuration and automatic face/hand detail enhancement.
 - **Simplify UI**: Hide unused widgets while preserving default settings.
@@ -167,10 +166,9 @@ Quick start: open the **Settings** tab, enter your server URL (default `http://1
 One line per mode:
 
 - **Txt2Img**: prompt to a new layer, with Prompt Presets (save/load/rename/delete, max 50) and a collapsible **Tiled (high-res)** section (tile size 512/768/1024, overlap 0-128 px).
-- **Img2Img**: transform a selection, layer, or canvas with a Denoise Strength slider; **Smart size** suggests a step-aligned resolution; inline Interrogate block for quick captioning.
+- **Img2Img**: transform a selection, layer, or canvas with a Denoise Strength slider; **Smart size** suggests a step-aligned resolution.
 - **Inpaint**: paint white on the mask layer (**Quick Mask** bootstraps one), with mask blur, Soft Inpainting, and restore-after-generate mask visibility.
 - **Upscale**: scale by factor or to exact dimensions via `extra-single-image`, with optional canvas resize.
-- **Interrogate**: caption an image with CLIP; insert as replace, append, or prepend into a chosen mode's prompt.
 - **Remove Background**: RemBG models (u2net, isnet, and friends) with alpha matting and mask output.
 - **ControlNet**: multi-unit preprocessor/model configs under Extensions; the IP-Adapter reference slot appears only when the backend advertises it.
 - **ADetailer**: face and detail enhancement; model list fetched from the API, not hardcoded.

@@ -19,7 +19,6 @@ from .adapters.sd_api import SDAPI
 from .pages import (
     Img2ImgPage,
     InpaintPage,
-    InterrogatePage,
     RemBGPage,
     SegmentationMapPage,
     SettingsPage,
@@ -75,7 +74,6 @@ class ForgeDocker(DockWidget):
             {"name": "Txt2Img", "icon": "✨", "content": self.show_txt2img},
             {"name": "Img2Img", "icon": "🖼️", "content": self.show_img2img},
             {"name": "Inpaint", "icon": "🎨", "content": self.show_inpaint},
-            {"name": "Interrogate", "icon": "🔍", "content": self.show_interrogate},
             {"name": "Upscale", "icon": "🔍", "content": self.show_upscale},
             {"name": "Remove Background", "icon": "🗑️", "content": self.show_rembg},
             {"name": "Segmentation Map", "icon": "🗺️", "content": self.show_segmap},
@@ -208,9 +206,6 @@ class ForgeDocker(DockWidget):
 
     def show_inpaint(self) -> None:
         self.content_area.setWidget(InpaintPage(self.settings_controller, self.api))
-
-    def show_interrogate(self) -> None:
-        self.content_area.setWidget(InterrogatePage(self.settings_controller, self.api))
 
     def show_upscale(self) -> None:
         self.content_area.setWidget(UpscalePage(self.settings_controller, self.api))
