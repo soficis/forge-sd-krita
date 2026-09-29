@@ -4,7 +4,6 @@ import logging
 
 from .qt_compat import (
     Qt,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -81,8 +80,10 @@ class ForgeDocker(DockWidget):
 
         self.page_tabs = QTabBar()
         self.page_tabs.setObjectName("PageTabs")
-        self.page_tabs.setShape(QTabBar.RoundedWest)
-        self.page_tabs.setExpanding(True)
+        self.page_tabs.setShape(QTabBar.Shape.RoundedNorth)
+        self.page_tabs.setExpanding(False)
+        self.page_tabs.setElideMode(Qt.TextElideMode.ElideRight)
+        self.page_tabs.setUsesScrollButtons(True)
         for page in self.pages:
             self.page_tabs.addTab(f"{page['icon']} {page['name']}")
         self.page_tabs.currentChanged.connect(self.change_page)
@@ -103,12 +104,6 @@ class ForgeDocker(DockWidget):
         self.content_area = QScrollArea()
         self.content_area.setWidgetResizable(True)
 
-        sidebar = QWidget()
-        sidebar_layout = QVBoxLayout()
-        sidebar_layout.setContentsMargins(0, 0, 0, 0)
-        sidebar_layout.addWidget(self.page_tabs)
-        sidebar.setLayout(sidebar_layout)
-
         content_panel = QWidget()
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -116,9 +111,9 @@ class ForgeDocker(DockWidget):
         content_layout.addWidget(self.content_area)
         content_panel.setLayout(content_layout)
 
-        main_layout = QHBoxLayout()
+        main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(sidebar)
+        main_layout.addWidget(self.page_tabs)
         main_layout.addWidget(content_panel, 1)
         self.main_widget.setLayout(main_layout)
 
