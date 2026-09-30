@@ -112,7 +112,7 @@ The plugin inspects prompt text for turbo/distill LoRA tags and automatically ad
 - **Upscale**: Single-image upscaling via `extra-single-image` endpoint (Lanczos, 4x-UltraSharp, 4x-AnimeSharp).
 - **Remove Background**: RemBG integration with alpha matting and mask outputs.
 - **ControlNet & ADetailer**: Multi-unit ControlNet configuration and automatic face/hand detail enhancement.
-- **Simplify UI**: Hide unused widgets while preserving default settings.
+- **Simplify UI** (collapsible section at the bottom of the **Settings** tab): Hide unused widgets while preserving default settings.
 
 ---
 

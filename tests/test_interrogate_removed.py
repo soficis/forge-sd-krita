@@ -6,7 +6,8 @@ no /sdapi/v1/interrogate endpoint (404, no matching openapi path). This file
 locks the removal: the source files are gone, the word appears nowhere in the
 shipped forge/ package (test files under tests/ may still mention it), the
 settings schema carries no interrogate keys, and forge/forge.py exposes
-exactly 8 page tabs with no Interrogate entry or dispatcher.
+exactly 7 page tabs (Simplify UI later folded into Settings) with no
+Interrogate entry or dispatcher.
 
 Docker construction reuses the fresh-module-load pattern from
 test_connection_errors.py (aliased module + DockWidget stub), with SDAPI
@@ -31,7 +32,6 @@ FORGE_DIR = REPO_ROOT / "forge"
 
 EXPECTED_PAGE_NAMES = [
     "Settings",
-    "Simplify UI",
     "Txt2Img",
     "Img2Img",
     "Inpaint",
@@ -172,7 +172,7 @@ class TestDefaultSettingsSchema:
 
 
 # ---------------------------------------------------------------------------
-# 4. Page list in forge/forge.py: exactly 8 tabs, no Interrogate entry
+# 4. Page list in forge/forge.py: exactly 7 tabs, no Interrogate entry
 # ---------------------------------------------------------------------------
 
 
@@ -187,8 +187,8 @@ class TestPageListInForgeSource:
         )
         return assignments[0]
 
-    def test_page_list_has_exactly_eight_entries(self, pages_list):
-        assert len(pages_list.elts) == 8
+    def test_page_list_has_exactly_seven_entries(self, pages_list):
+        assert len(pages_list.elts) == 7
 
     def test_page_list_has_no_interrogate_entry(self, pages_list):
         for entry in pages_list.elts:
@@ -202,7 +202,7 @@ class TestPageListInForgeSource:
 
 
 # ---------------------------------------------------------------------------
-# 5. The module still imports and the full docker constructs (8 tabs)
+# 5. The module still imports and the full docker constructs (7 tabs)
 # ---------------------------------------------------------------------------
 
 
@@ -269,7 +269,7 @@ class TestForgeDockerSurface:
         docker = self._construct_docker()
         assert isinstance(docker.pages, list)
 
-    def test_docker_page_list_is_eight_tabs_without_interrogate(self):
+    def test_docker_page_list_is_seven_tabs_without_interrogate(self):
         docker = self._construct_docker()
         names = [page["name"] for page in docker.pages]
         assert names == EXPECTED_PAGE_NAMES

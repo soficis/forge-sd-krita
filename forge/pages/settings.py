@@ -9,6 +9,8 @@ from ..qt_compat import (
 from ..adapters.sd_api import SDAPI
 from ..settings_controller import SettingsController
 from ..version import __version__
+from ..widgets import CollapsibleWidget
+from .simplify import SimplifyPage
 
 _MAX_RECENT_HOSTS = 5
 
@@ -91,6 +93,7 @@ class SettingsPage(QWidget):
         self._previews_group()
         self._prompt_group()
         self._version_group()
+        self._simplify_group()
         self.layout().addStretch()
 
     def _server_settings_group(self) -> None:
@@ -279,6 +282,15 @@ class SettingsPage(QWidget):
         version_group.layout().addWidget(self._update_status)
 
         self.layout().addWidget(version_group)
+
+    def _simplify_group(self) -> None:
+        # The former "Simplify UI" tab, folded in as a section. Starts
+        # collapsed so the connection/server controls stay on top.
+        simplify = SimplifyPage(self.settings_controller, self.api)
+        section = CollapsibleWidget("Simplify UI", simplify)
+        section.toggle_label.setChecked(False)
+        section.toggle()
+        self.layout().addWidget(section)
 
     def _check_updates(self) -> None:
         self._update_btn.setEnabled(False)

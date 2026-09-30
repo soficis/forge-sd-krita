@@ -21,7 +21,6 @@ from .pages import (
     RemBGPage,
     SegmentationMapPage,
     SettingsPage,
-    SimplifyPage,
     Txt2ImgPage,
     UpscalePage,
 )
@@ -69,7 +68,6 @@ class ForgeDocker(DockWidget):
 
         self.pages = [
             {"name": "Settings", "icon": "⚙️", "content": self.show_settings},
-            {"name": "Simplify UI", "icon": "🔧", "content": self.show_simplify},
             {"name": "Txt2Img", "icon": "✨", "content": self.show_txt2img},
             {"name": "Img2Img", "icon": "🖼️", "content": self.show_img2img},
             {"name": "Inpaint", "icon": "🎨", "content": self.show_inpaint},
@@ -189,9 +187,6 @@ class ForgeDocker(DockWidget):
 
     def show_settings(self) -> None:
         self.content_area.setWidget(SettingsPage(self.settings_controller, self.api))
-
-    def show_simplify(self) -> None:
-        self.content_area.setWidget(SimplifyPage(self.settings_controller, self.api))
 
     def show_txt2img(self) -> None:
         self.content_area.setWidget(Txt2ImgPage(self.settings_controller, self.api))

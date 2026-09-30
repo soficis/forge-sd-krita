@@ -43,6 +43,9 @@ class SimplifyPage(QWidget):
             'inpaint_masked_content': self.settings_controller.get('hide_ui.inpaint_masked_content'),
             'inpaint_area': self.settings_controller.get('hide_ui.inpaint_area'),
             'soft_inpaint': self.settings_controller.get('hide_ui.soft_inpaint'),
+            'tiled': self.settings_controller.get('hide_ui.tiled'),
+            'prompt_presets': self.settings_controller.get('hide_ui.prompt_presets'),
+            'scheduler': self.settings_controller.get('hide_ui.scheduler'),
         }
         self.server_supported = {
             'controlnet': self.api.script_installed('controlnet'),
@@ -84,6 +87,9 @@ class SimplifyPage(QWidget):
         hide_sampler = self._setup_checkbox('Hide Sampler and Steps', 'sampler')
         model_settings.layout().addWidget(hide_sampler)
 
+        hide_scheduler = self._setup_checkbox('Hide Scheduler', 'scheduler')
+        model_settings.layout().addWidget(hide_scheduler)
+
         self.model_widget = ModelsWidget(self.settings_controller, self.api, ignore_hidden=True)
         model_settings.layout().addWidget(self.model_widget)
 
@@ -104,6 +110,9 @@ class SimplifyPage(QWidget):
 
         hide_hires_denoise = self._setup_checkbox('Hide Hires Fix Denoise Strength', 'hires_denoise')
         hires_fix_settings.layout().addWidget(hide_hires_denoise)
+
+        hide_tiled = self._setup_checkbox('Hide Tiled (high-res)', 'tiled')
+        hires_fix_settings.layout().addWidget(hide_tiled)
 
         self.hires_fix_widget = HiResFixWidget(self.settings_controller, self.api, ignore_hidden=True)
         hires_fix_settings.layout().addWidget(self.hires_fix_widget)
@@ -234,6 +243,8 @@ class SimplifyPage(QWidget):
         # Extra Networks
         hide_extra_networks = self._setup_checkbox('Hide Extra Networks', 'extra_networks')
         prompt_settings.layout().addWidget(hide_extra_networks)
+        hide_prompt_presets = self._setup_checkbox('Hide Prompt Presets', 'prompt_presets')
+        prompt_settings.layout().addWidget(hide_prompt_presets)
         self.layout().addWidget(prompt_settings)
 
         # CFG
