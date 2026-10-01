@@ -2,68 +2,171 @@
 # Git Ignore Configuration — Forge SD-Krita Plugin
 # ==============================================================================
 
-# Python Caches & Build Artifacts
-**/__pycache__/
-*.pyc
-*.pyo
+# ------------------------------------------------------------------------------
+# 1. Secrets, Credentials, & Private Configurations
+# ------------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.local
+*.key
+*.pem
+*.crt
+*.cert
+*.cer
+*.pfx
+*.p12
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+credentials.json
+token.json
+tokens.json
+auth.json
+secrets.json
+*.secret
+*.secrets
+*.sqlite
+*.sqlite3
+*.db
+
+# ------------------------------------------------------------------------------
+# 2. Python Environments, Caches, & Build Artifacts
+# ------------------------------------------------------------------------------
+__pycache__/
+**/*.py[cod]
+*$py.class
 *.pyd
-.pytest_cache/
-.ruff_cache/
-.tox/
-.coverage
-.cache/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Package Builds & Distribution
 dist/
 build/
 *.egg-info/
+*.egg
+*.whl
+*.zip
+*.tar.gz
+
+# Test & Coverage Outputs
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
+.cache/
 
-# Log Files, Test Outputs & Scratch Scripts
+# ------------------------------------------------------------------------------
+# 3. Log Files, Debug Dumps, & Test Scratch
+# ------------------------------------------------------------------------------
 *.log
+*debug*.log
+forge_debug.log
+log.json
+*_log.json
 pytest_output.txt
 syntax_check.py
 *.tmp
+*.temp
+*.bak
+*.orig
+*.dmp
+core.*
 
-# Documentation Folder (All documentation consolidated into README.md)
-docs/
-
-# Plugin Local Runtime & Settings (Local Desktop Only)
-forge/user_settings.json
+# ------------------------------------------------------------------------------
+# 4. Plugin Local Runtime & Settings (Local Desktop Only)
+# ------------------------------------------------------------------------------
+user_settings.json
+user_settings.json.*
+user_settings_backup_*.json
 forge/test.json
 forge/saved.png
 forge/log.json
 forge/*_log.json
 forge/debug.png
-forge/user_settings_backup_*.json
+forge/forge_debug.log
 cyanic/
 
-# IDE Caches, Agent Private Directories & Session Documents
+# Stray literal copy of the plugin folder created when unexpanded %APPDATA% ran
+%APPDATA%/
+AppData/
+
+# Documentation scaffolding folder (consolidated into README.md)
+docs/
+
+# ------------------------------------------------------------------------------
+# 5. Scratch, Handoff, & AI Agent Scaffolding
+# ------------------------------------------------------------------------------
+scratch/
+tmp/
+temp/
+discussion.md
+HANDOFF_*.md
+TASK_*.md
+task.md
+implementation_plan.md
+walkthrough.md
+CONSTRAINTS.md
+
+# Agent and Tool Configuration Directories
+.agents/
+.anchor/
 .codegraph/
+.claude/
+.cursor/
+.aider*
+.continue/
 .omo/
 .serena/
 .rooroo/
 .roomodes
 .roo-ignore
-.agents/
 .opencode/
 .brain/
 .gemini/
-implementation_plan.md
-walkthrough.md
-task.md
+.windsurf/
+.copilot/
+.codeium/
 
-# Secrets & Environment Configurations
-.env
-.env.*
-!.env.example
-*.local
+# Agent Prompt Files
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+COPILOT.md
+CURSOR.md
 
-# Editor & OS System Files
+# ------------------------------------------------------------------------------
+# 6. IDE, Editor, & OS System Files
+# ------------------------------------------------------------------------------
 .vscode/
 .idea/
-.DS_Store
-Thumbs.db
-desktop.ini
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
 *.swp
+*.swo
 *~
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/

@@ -196,6 +196,14 @@ class KritaAdapter:
         buffer = QBuffer(byte_array)
         buffer.open(QIODevice.OpenModeFlag.WriteOnly)
         image.save(buffer, "PNG")
+        size = getattr(byte_array, "size", lambda: -1)()
+        if size == 0 and hasattr(image, "convertToFormat"):
+            try:
+                converted = image.convertToFormat(QImage.Format.Format_ARGB32)
+                buffer.seek(0)
+                converted.save(buffer, "PNG")
+            except Exception:
+                pass
         return byte_array.toBase64().data().decode()
 
     def find_below(self, below_layer=None):
@@ -377,6 +385,16 @@ class KritaAdapter:
         finally:
             mask_layer.setVisible(was_visible)
             document.refreshProjection()
+
+        if hasattr(source_image, "isNull") and source_image.isNull():
+            source_image = document.projection(x, y, width, height)
+            if hasattr(source_image, "isNull") and source_image.isNull() and hasattr(document, "pixelData"):
+                try:
+                    raw_pixels = document.pixelData(x, y, width, height)
+                    if raw_pixels:
+                        source_image = self.projection_to_qimage(raw_pixels, width, height)
+                except Exception:
+                    pass
 
         return mask_image_bw, source_image
 
@@ -640,10 +658,15 @@ class KritaAdapter:
     def _bounds_for_mode(self, mode: str) -> tuple[int, int, int, int]:
         mode = mode.lower()
         if mode == "selection":
-            return self.get_selection_bounds()
-        if mode == "layer":
-            return self.get_layer_bounds()
-        return self.get_canvas_bounds()
+            x, y, w, h = self.get_selection_bounds()
+        elif mode == "layer":
+            x, y, w, h = self.get_layer_bounds()
+        else:
+            return self.get_canvas_bounds()
+
+        if w <= 0 or h <= 0:
+            return self.get_canvas_bounds()
+        return x, y, w, h
 
     def _resolve_result_dimensions(self, results) -> tuple[int, int]:
         if isinstance(results, dict):

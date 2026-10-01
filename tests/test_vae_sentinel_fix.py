@@ -77,6 +77,12 @@ class _Widget:
     def setToolTip(self, text):
         self._tooltip = text
 
+    def setVisible(self, visible):
+        self._visible = bool(visible)
+
+    def isVisible(self):
+        return getattr(self, "_visible", True)
+
 
 class _Layout:
     def __init__(self, *args, **kwargs):
@@ -143,9 +149,12 @@ class _CheckBox(_Widget):
         super().__init__(*args, **kwargs)
         self._checked = False
         self.stateChanged = _Signal()
+        self.toggled = _Signal()
 
     def setChecked(self, value):
         self._checked = bool(value)
+        self.stateChanged.emit(self._checked)
+        self.toggled.emit(self._checked)
 
     def isChecked(self):
         return self._checked

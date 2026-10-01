@@ -175,6 +175,9 @@ class _FakeMaskKC:
     def get_selection_bounds(self):
         return self.selection_bounds
 
+    def get_canvas_bounds(self):
+        return (0, 0, 512, 512)
+
     def get_mask_and_image(self, mode: str = "canvas"):
         self.mask_reads.append(mode)
         return "mask-b64", "image-b64"
@@ -377,3 +380,52 @@ class TestQuickMaskErrorSurface:
         args = mb.warning.call_args[0]
         assert args[1] == "Quick Mask"
         assert "disk full on createNode" in args[2]
+
+
+class TestQuickMaskBoundsFallback:
+    def test_empty_layer_bounds_falls_back_to_canvas_bounds(self, tmp_path):
+        kc = _FakeMaskKC()
+        kc.layer_bounds = (0, 0, 0, 0)
+        kc.get_canvas_bounds = lambda: (0, 0, 512, 512)
+        widget = _make_widget(tmp_path, kc)
+
+        widget.update_size_dict("layer")
+
+        assert widget.size_dict == {"x": 0, "y": 0, "w": 512, "h": 512}
+
+    def test_update_mask_only_syncs_image_in_layer_mode(self, tmp_path):
+        kc = _FakeMaskKC()
+        widget = _make_widget(tmp_path, kc)
+        widget.image = "old-image"
+        kc.get_mask_and_image = lambda mode: ("updated-mask", "updated-image")
+
+        widget.update_mask_only("layer")
+
+        assert widget.mask == "updated-mask"
+        assert widget.image == "updated-image"
+
+    def test_get_generation_data_refetches_when_image_is_null(self, tmp_path):
+        kc = _FakeMaskKC()
+        widget = _make_widget(tmp_path, kc)
+        null_img = MagicMock()
+        null_img.isNull.return_value = True
+        widget.image = null_img
+
+        kc.get_mask_and_image = MagicMock(return_value=("mask-b64", "new-image-b64"))
+        kc.qimage_to_b64_str = MagicMock(return_value="valid-b64")
+
+        data = widget.get_generation_data()
+        assert kc.get_mask_and_image.called
+
+    def test_krita_adapter_bounds_for_mode_fallback(self):
+        from forge.adapters.krita_adapter import KritaAdapter
+        adapter = KritaAdapter.__new__(KritaAdapter)
+        adapter.get_selection_bounds = lambda: (0, 0, 0, 0)
+        adapter.get_layer_bounds = lambda: (0, 0, 0, 0)
+        adapter.get_canvas_bounds = lambda: (0, 0, 800, 600)
+
+        assert adapter._bounds_for_mode("layer") == (0, 0, 800, 600)
+        assert adapter._bounds_for_mode("selection") == (0, 0, 800, 600)
+
+        adapter.get_layer_bounds = lambda: (10, 20, 100, 200)
+        assert adapter._bounds_for_mode("layer") == (10, 20, 100, 200)

@@ -169,6 +169,9 @@ class _Widget(_QObject):
     def hide(self):
         self._hidden = True
 
+    def deleteLater(self):
+        self._deleted = True
+
     def setEnabled(self, enabled):
         self._enabled = bool(enabled)
 
@@ -953,6 +956,21 @@ def _hide_checkboxes(page):
     return [w for w in _all_widgets(page) if isinstance(w, _QCheckBox)]
 
 
+def _expand_simplify(page):
+    """Click the collapsed 'Simplify UI' header open, as a user would.
+
+    The section is built lazily on first expansion, so no hide_ui checkbox
+    exists until then.
+    """
+    header = next(
+        w for w in _all_widgets(page)
+        if isinstance(w, _QPushButton) and w.text().endswith("Simplify UI")
+    )
+    header.setChecked(True)
+    header.clicked.emit(True)
+    return header
+
+
 def _toggle_and_diff(settings, checkbox) -> set:
     """Flip the checkbox; return the hide_ui.* keys whose controller value
     changed as a result (the key the checkbox is bound to).
@@ -1109,6 +1127,7 @@ class TestSettingsExposesEveryHideUiKey:
         with _settings_env() as env:
             settings = _hide_settings()
             page = env.settings.SettingsPage(settings, _SettingsAPI())
+            _expand_simplify(page)
 
             covered = set()
             bound_controls = 0
@@ -1156,6 +1175,10 @@ class TestSettingsExposesEveryHideUiKey:
         with _settings_env() as env:
             settings = _hide_settings()
             page = env.settings.SettingsPage(settings, _SettingsAPI())
+            assert not [
+                cb for cb in _hide_checkboxes(page) if cb.text().startswith("Hide ")
+            ], "Simplify built before expansion"
+            _expand_simplify(page)
             labels = [cb.text() for cb in _hide_checkboxes(page)]
             assert any(
                 label.startswith("Hide ") for label in labels
@@ -1173,6 +1196,7 @@ class TestHideModelRoundTrip:
         with _settings_env() as env:
             settings = _hide_settings()
             page = env.settings.SettingsPage(settings, _SettingsAPI())
+            _expand_simplify(page)
             assert settings.values["hide_ui.model"] is False
 
             toggled = False
@@ -1196,3 +1220,58 @@ class TestHideModelRoundTrip:
             settings.set("hide_ui.model", False)
             shown_widget = env.models.ModelsWidget(settings, _SettingsAPI())
             assert shown_widget.model_box in _all_widgets(shown_widget)
+
+
+# ---------------------------------------------------------------------------
+# 5. Lazy build, rebuild after connect, flush on toggle
+# ---------------------------------------------------------------------------
+
+
+class TestSimplifyLifecycle:
+    def test_not_built_until_expanded(self):
+        with _settings_env() as env:
+            page = env.settings.SettingsPage(_hide_settings(), _SettingsAPI())
+            assert page._simplify_page is None
+            _expand_simplify(page)
+            assert page._simplify_page is not None
+
+    def test_successful_connect_rebuilds_an_expanded_section(self):
+        with _settings_env() as env:
+            settings = _hide_settings()
+            api = _SettingsAPI(connected=False)
+            api.change_host = lambda host: True
+            page = env.settings.SettingsPage(settings, api)
+            _expand_simplify(page)
+            before = page._simplify_page
+            page._on_test_finished("http://127.0.0.1:7860", True, "ok")
+            assert page._simplify_page is not before
+            assert page._simplify_page is not None
+
+    def test_successful_connect_leaves_an_unbuilt_section_unbuilt(self):
+        with _settings_env() as env:
+            api = _SettingsAPI(connected=False)
+            api.change_host = lambda host: True
+            page = env.settings.SettingsPage(_hide_settings(), api)
+            page._on_test_finished("http://127.0.0.1:7860", True, "ok")
+            assert page._simplify_page is None
+
+    def test_failed_connect_does_not_rebuild(self):
+        with _settings_env() as env:
+            page = env.settings.SettingsPage(_hide_settings(), _SettingsAPI())
+            _expand_simplify(page)
+            before = page._simplify_page
+            page._on_test_finished("http://127.0.0.1:7860", False, "refused")
+            assert page._simplify_page is before
+
+    def test_autosaved_hide_toggle_is_flushed_to_disk(self):
+        with _settings_env() as env:
+            settings = _hide_settings()
+            page = env.settings.SettingsPage(settings, _SettingsAPI())
+            _expand_simplify(page)
+            saves = settings.save_count
+            toggled = next(
+                cb for cb in _hide_checkboxes(page) if cb.text() == "Hide Model"
+            )
+            toggled.setChecked(True)
+            assert settings.values["hide_ui.model"] is True
+            assert settings.save_count > saves

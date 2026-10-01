@@ -315,6 +315,9 @@ class SimplifyPage(QWidget):
 
         if self.auto_save:
             self.save_hidden()
+            # Flush like every other auto-saving Settings control, so a toggle
+            # survives a restart without a trip through the Save button.
+            self.settings_controller.save()
 
     def _update_autosave(self, value):
         self.auto_save = value

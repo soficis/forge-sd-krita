@@ -311,11 +311,11 @@ class TestConfigsValidation:
         cfg = CONFIGS[family]
         assert cfg.default_sampler, f"{family.name}: default_sampler is empty"
 
-    @pytest.mark.parametrize("family", list(ModelFamily))
-    def test_scheduler_nonempty(self, family: ModelFamily):
-        """Each config must have a non-empty default_scheduler."""
-        cfg = CONFIGS[family]
-        assert cfg.default_scheduler, f"{family.name}: default_scheduler is empty"
+    def test_configs_carry_no_scheduler_default(self):
+        """The backend owns the per-preset scheduler; a plugin copy is dead data."""
+        assert not hasattr(ModelConfig, "default_scheduler")
+        for cfg in CONFIGS.values():
+            assert not hasattr(cfg, "default_scheduler")
 
     def test_config_count_matches_family_count(self):
         """CONFIGS must have exactly one entry per ModelFamily member."""

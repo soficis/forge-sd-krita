@@ -37,6 +37,9 @@ from ..settings_controller import SettingsController
 
 logger = logging.getLogger(__name__)
 
+# Kept out of the debug log: user text.
+_UNLOGGED_KEYS = frozenset({"prompt", "negative_prompt"})
+
 
 TILED_PAYLOAD_KEYS = ("tiled_enabled", "tiled_tile_size", "tiled_overlap")
 
@@ -91,6 +94,23 @@ def _extract_tiled_request(data: dict) -> tuple[dict, int, int] | None:
     return clean_data, tile_size, overlap
 
 
+def _apply_queue_status(label, text: str, status: str = "", active: bool = False) -> None:
+    if label is None:
+        return
+    try:
+        label.setText(text)
+        if hasattr(label, "setProperty"):
+            label.setProperty("status", status)
+            label.setProperty("active", "true" if active else "false")
+        if hasattr(label, "style"):
+            style = label.style()
+            if style is not None and hasattr(style, "unpolish") and hasattr(style, "polish"):
+                style.unpolish(label)
+                style.polish(label)
+    except (RuntimeError, Exception):
+        return
+
+
 class GenerateWidget(QWidget):
     GENERATION_ENDPOINT_BY_MODE = {
         "txt2img": "txt2img",
@@ -121,6 +141,11 @@ class GenerateWidget(QWidget):
         self.finished = False
         self.debug = False
         self.progress_timer = None
+        # Set by cleanup(): the page was switched away or the docker closed,
+        # so Qt may already have deleted this widget's children. A generation
+        # still in flight then finishes into a dead UI and must not touch it.
+        self._disposed = False
+        self._run_error = None
         self._progress_timer_start = 0.0
         self._last_progress_change_time = 0.0
         self._last_progress_value = -1
@@ -144,6 +169,7 @@ class GenerateWidget(QWidget):
         self.layout().addWidget(self.generate_btn)
 
         self.queue_status_label = QLabel("Queue: 0 jobs")
+        self.queue_status_label.setObjectName("QueueStatusLabel")
         self.layout().addWidget(self.queue_status_label)
 
         self.clear_queue_btn = QPushButton("Clear Queue")
@@ -159,6 +185,7 @@ class GenerateWidget(QWidget):
             self.layout().addWidget(self.debug_data)
 
     def handle_generate_btn_click(self) -> None:
+        logger.info("generate click: mode=%s is_generating=%s", self.mode, self.is_generating)
         if self.is_generating:
             self.cancel()
         else:
@@ -203,9 +230,16 @@ class GenerateWidget(QWidget):
             raw_prompt = generation_data.get("prompt", "")
             prompt = raw_prompt.strip() if isinstance(raw_prompt, str) else ""
             validation_errors = validate_generation_data(generation_data)
+            if self.mode == "inpaint" and any(type(w).__name__ == "MaskWidget" for w in self.list_of_widgets):
+                if not generation_data.get("inpaint_img"):
+                    validation_errors.append("Inpaint requires an active canvas image.")
             if validation_errors or not prompt:
-                self.queue_status_label.setText(
-                    "Cannot generate: %s" % (validation_errors[0] if validation_errors else "Prompt is empty.")
+                logger.info("generate refused: %s", validation_errors or "empty prompt")
+                _apply_queue_status(
+                    getattr(self, "queue_status_label", None),
+                    "Cannot generate: %s" % (validation_errors[0] if validation_errors else "Prompt is empty."),
+                    status="error",
+                    active=False,
                 )
                 self._restore_hidden_layers()
                 return
@@ -256,6 +290,9 @@ class GenerateWidget(QWidget):
         self.current_job = job
         self.abort = False
         self.finished = False
+        # A failed run must not inherit the previous run's image or error.
+        self.results = None
+        self._run_error = None
         self.is_generating = True
         self.generate_btn.setText("Cancel")
         self.progress_bar.setHidden(False)
@@ -274,7 +311,15 @@ class GenerateWidget(QWidget):
             if self.kc.doc is None:
                 self.kc.create_new_doc()
 
-            self.kc.run_as_thread(
+            logger.info(
+                "starting job: mode=%s size=%sx%s settings=%s",
+                self.mode, job.data.get("width"), job.data.get("height"),
+                {k: v for k, v in sorted(job.data.items())
+                 if k not in _UNLOGGED_KEYS
+                 and not isinstance(v, (dict, list))
+                 and not (isinstance(v, str) and len(v) > 200)},
+            )
+            started = self.kc.run_as_thread(
                 lambda: self.threadable_run(job.data),
                 lambda: self.threadable_return(
                     job.x,
@@ -284,6 +329,9 @@ class GenerateWidget(QWidget):
                     job.processing_instructions,
                 ),
             )
+
+            if started is False:
+                logger.warning("run_as_thread refused to start (worker busy); job dropped")
 
             refresh_seconds = self.settings_controller.get("previews.refresh_seconds")
             refresh_ms = max(int(1000 * refresh_seconds), 100)
@@ -399,20 +447,31 @@ class GenerateWidget(QWidget):
         )
 
     def threadable_run(self, data: dict) -> None:
-        endpoint_name = self.GENERATION_ENDPOINT_BY_MODE.get(self.mode)
-        if endpoint_name is None:
-            raise RuntimeError(f"Unsupported generation mode: {self.mode}")
+        # The worker's error signal has no listener, so an exception here
+        # would vanish without a trace; record it for threadable_return.
+        try:
+            endpoint_name = self.GENERATION_ENDPOINT_BY_MODE.get(self.mode)
+            if endpoint_name is None:
+                raise RuntimeError(f"Unsupported generation mode: {self.mode}")
 
-        tiled_request = _extract_tiled_request(data)
-        if self.mode == "txt2img" and tiled_request is not None:
-            clean_data, tile_size, overlap = tiled_request
-            self.results = self.api.tiled_generate(
-                clean_data, tile_size=tile_size, overlap=overlap
+            tiled_request = _extract_tiled_request(data)
+            if self.mode == "txt2img" and tiled_request is not None:
+                clean_data, tile_size, overlap = tiled_request
+                self.results = self.api.tiled_generate(
+                    clean_data, tile_size=tile_size, overlap=overlap
+                )
+                return
+
+            run_generation = getattr(self.api, endpoint_name)
+            self.results = run_generation(_strip_tiled_keys(data))
+            logger.info(
+                "request finished: endpoint=%s result=%s api_error=%r",
+                endpoint_name, type(self.results).__name__,
+                getattr(self.api, "last_error_message", ""),
             )
-            return
-
-        run_generation = getattr(self.api, endpoint_name)
-        self.results = run_generation(_strip_tiled_keys(data))
+        except Exception as error:
+            logger.exception("Forge SD - generation request failed")
+            self._run_error = error
 
     def threadable_return(
         self,
@@ -422,6 +481,8 @@ class GenerateWidget(QWidget):
         height: int,
         processing_instructions: dict,
     ) -> None:
+        logger.info("threadable_return: has_results=%s run_error=%r abort=%s",
+                    self.results is not None, self._run_error, self.abort)
         try:
             layer_adapter = KritaAdapter()
             if self.results is not None:
@@ -450,34 +511,70 @@ class GenerateWidget(QWidget):
                     )
 
             elif self.debug:
-                self.debug_data.setPlainText(
-                    f"{self.debug_data.toPlainText()}\nThreadable return had no results"
-                )
+                try:
+                    self.debug_data.setPlainText(
+                        f"{self.debug_data.toPlainText()}\nThreadable return had no results"
+                    )
+                except RuntimeError:
+                    pass
         finally:
             self._restore_hidden_layers()
             self.current_job = None
             self._stop_generation_loop()
-            self.update()
+            if not getattr(self, "_disposed", False):
+                try:
+                    self.update()
 
-            if self.job_queue and not self.abort:
-                self._start_next_job()
-            else:
-                self.generate_btn.setText("Generate")
-                self.progress_bar.setHidden(True)
-                self.update_progress_bar(0)
-                self._update_queue_status()
-                self.update()
+                    if self.job_queue and not self.abort:
+                        self._start_next_job()
+                    else:
+                        try:
+                            self.generate_btn.setText("Generate")
+                        except RuntimeError:
+                            pass
+                        try:
+                            self.progress_bar.setHidden(True)
+                        except RuntimeError:
+                            pass
+                        self.update_progress_bar(0)
+                        self._update_queue_status()
+                        try:
+                            self.update()
+                        except RuntimeError:
+                            pass
+                        if self.results is None and not self.abort:
+                            _apply_queue_status(getattr(self, "queue_status_label", None), self._failure_message(), status="error", active=False)
+                except RuntimeError:
+                    pass
+
+    def _failure_message(self) -> str:
+        """Why a finished job produced no image, for the status line."""
+        if self._run_error is not None:
+            reason = "%s: %s" % (type(self._run_error).__name__, self._run_error)
+        else:
+            reason = getattr(self.api, "last_error_message", "") or "no result returned"
+        return "Generation failed: %s" % reason
 
     def _stop_generation_loop(self) -> None:
-        self.update_progress_bar(0)
-        self.kc.delete_preview_layer()
-        if self.progress_timer is not None:
-            self.progress_timer.stop()
+        try:
+            self.kc.delete_preview_layer()
+        except Exception:
+            pass
         self.is_generating = False
+        if getattr(self, "_disposed", False):
+            return
+        self.update_progress_bar(0)
+        if self.progress_timer is not None:
+            try:
+                self.progress_timer.stop()
+            except RuntimeError:
+                # C++ timer already deleted with its parent widget.
+                self.progress_timer = None
         self._update_queue_status()
 
     def cleanup(self) -> None:
         """Stop the progress timer; safe on page switch or docker close."""
+        self._disposed = True
         timer = getattr(self, "progress_timer", None)
         if timer is not None:
             try:
@@ -491,28 +588,45 @@ class GenerateWidget(QWidget):
             self.abort = True
             self.current_job = None
             self.job_queue.clear()
-            self.generate_btn.setText("Generate")
-            self.progress_bar.setHidden(True)
+            try:
+                self.generate_btn.setText("Generate")
+                self.progress_bar.setHidden(True)
+            except RuntimeError:
+                pass
             self._stop_generation_loop()
             self._restore_hidden_layers()
             self._update_queue_status()
-            self.update()
+            try:
+                self.update()
+            except RuntimeError:
+                pass
         except Exception as error:
             raise RuntimeError(
                 f"Forge SD - Exception trying to interrupt: {error}"
             ) from error
 
+    def _set_queue_status_text(self, text: str, status: str = "", active: bool = False) -> None:
+        _apply_queue_status(getattr(self, "queue_status_label", None), text, status, active)
+
     def _update_queue_status(self) -> None:
         """Update the queue status label and clear button visibility."""
-        queued = len(self.job_queue)
-        if self.is_generating:
-            if queued > 0:
-                self.queue_status_label.setText(f"Generating... Queue: {queued} jobs")
+        if getattr(self, "_disposed", False):
+            return
+        try:
+            queued = len(getattr(self, "job_queue", []))
+            label = getattr(self, "queue_status_label", None)
+            if getattr(self, "is_generating", False):
+                if queued > 0:
+                    _apply_queue_status(label, f"Generating... Queue: {queued} jobs", status="", active=True)
+                else:
+                    _apply_queue_status(label, "Generating...", status="", active=True)
             else:
-                self.queue_status_label.setText("Generating...")
-        else:
-            self.queue_status_label.setText(f"Queue: {queued} jobs")
-        self.clear_queue_btn.setHidden(queued == 0)
+                _apply_queue_status(label, f"Queue: {queued} jobs", status="", active=False)
+            clear_btn = getattr(self, "clear_queue_btn", None)
+            if clear_btn is not None and hasattr(clear_btn, "setHidden"):
+                clear_btn.setHidden(queued == 0)
+        except RuntimeError:
+            pass
 
     def _clear_queue(self) -> None:
         """Remove all queued jobs without cancelling the current one."""

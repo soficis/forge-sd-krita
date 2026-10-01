@@ -125,7 +125,7 @@ class MaskWidget(QWidget):
         self.brush_size_box.setToolTip("Current brush size (read from Krita).")
         mask_row.layout().addWidget(self.brush_size_box)
 
-        self.mask_opacity_toggle = QCheckBox("50%")
+        self.mask_opacity_toggle = QCheckBox("Mask 50% opacity")
         self.mask_opacity_toggle.setToolTip(
             "Toggle mask layer opacity between 50% and 100%."
         )
@@ -414,12 +414,31 @@ class MaskWidget(QWidget):
                 self.size_dict["h"],
             ) = self.kc.get_layer_bounds()
         else:
-            (
-                self.size_dict["x"],
-                self.size_dict["y"],
-                self.size_dict["w"],
-                self.size_dict["h"],
-            ) = self.kc.get_canvas_bounds()
+            if hasattr(self.kc, "get_canvas_bounds"):
+                (
+                    self.size_dict["x"],
+                    self.size_dict["y"],
+                    self.size_dict["w"],
+                    self.size_dict["h"],
+                ) = self.kc.get_canvas_bounds()
+            elif hasattr(self.kc, "get_layer_bounds"):
+                (
+                    self.size_dict["x"],
+                    self.size_dict["y"],
+                    self.size_dict["w"],
+                    self.size_dict["h"],
+                ) = self.kc.get_layer_bounds()
+
+        if (self.size_dict["w"] <= 0 or self.size_dict["h"] <= 0) and hasattr(self.kc, "get_canvas_bounds"):
+            try:
+                (
+                    self.size_dict["x"],
+                    self.size_dict["y"],
+                    self.size_dict["w"],
+                    self.size_dict["h"],
+                ) = self.kc.get_canvas_bounds()
+            except Exception:
+                pass
 
     def update_preview_icons(self) -> None:
         self.preview_list.clear()
@@ -434,7 +453,14 @@ class MaskWidget(QWidget):
 
     def update_mask_only(self, mode: str = "canvas") -> None:
         self.update_size_dict(mode)
-        self.mask, _ = self.kc.get_mask_and_image(mode)
+        new_mask, new_img = self.kc.get_mask_and_image(mode)
+        self.mask = new_mask
+        if (
+            self.image is None
+            or (hasattr(self.image, "isNull") and self.image.isNull())
+            or mode == "layer"
+        ):
+            self.image = new_img
         self.update_preview_icons()
 
     def get_mask_and_img(self, mode: str = "canvas") -> None:
@@ -486,7 +512,7 @@ class MaskWidget(QWidget):
                     self.selection_mode = "canvas"
             self.update_mask_only(mode=self.selection_mode)
 
-        if self.image is None:
+        if self.image is None or (hasattr(self.image, "isNull") and self.image.isNull()):
             _, _, selection_w, selection_h = self.kc.get_selection_bounds()
             self.get_mask_and_img(
                 "selection" if selection_w > 0 and selection_h > 0 else "canvas"
@@ -500,10 +526,14 @@ class MaskWidget(QWidget):
             "inpaint_full_res_padding": self.variables["mask_padding"],
         }
 
-        if self.image is not None:
-            data["inpaint_img"] = self.kc.qimage_to_b64_str(self.image)
-        if self.mask is not None:
-            data["mask_img"] = self.kc.qimage_to_b64_str(self.mask)
+        if self.image is not None and not (hasattr(self.image, "isNull") and self.image.isNull()):
+            b64 = self.kc.qimage_to_b64_str(self.image)
+            if b64:
+                data["inpaint_img"] = b64
+        if self.mask is not None and not (hasattr(self.mask, "isNull") and self.mask.isNull()):
+            b64 = self.kc.qimage_to_b64_str(self.mask)
+            if b64:
+                data["mask_img"] = b64
 
         ref_layer_name = self.variables.get("reference_layer", "")
         if ref_layer_name:
@@ -517,12 +547,13 @@ class MaskWidget(QWidget):
             data["FORGE"] = {"results_below_layer_uuid": self.mask_uuid}
 
         if self.variables["hide_mask_on_gen"] and self.mask_uuid is not None:
-            layer = self.kc.get_layer_from_uuid(self.mask_uuid)
-            if layer is not None:
-                key = str(self.mask_uuid)
-                if key not in self._hidden_layer_state:
-                    self._hidden_layer_state[key] = self._layer_is_visible(layer)
-                self.kc.set_layer_visible(layer, False)
+            if hasattr(self.kc, "get_layer_from_uuid"):
+                layer = self.kc.get_layer_from_uuid(self.mask_uuid)
+                if layer is not None:
+                    key = str(self.mask_uuid)
+                    if key not in self._hidden_layer_state:
+                        self._hidden_layer_state[key] = self._layer_is_visible(layer)
+                    self.kc.set_layer_visible(layer, False)
 
         return data
 

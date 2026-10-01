@@ -2,6 +2,12 @@ from ..domain.model_registry import max_denoise_for_model
 from ..qt_compat import QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget, Qt
 from ..settings_controller import SettingsController
 
+DEFAULT_DENOISE_TOOLTIP = (
+    "Denoise strength: lower values preserve more of the original image, "
+    "higher values generate more changes."
+)
+
+
 class DenoiseWidget(QWidget):
     def __init__(self, settings_controller:SettingsController, include_start=False, include_end=False):
         super().__init__()
@@ -12,7 +18,9 @@ class DenoiseWidget(QWidget):
         denoise_row = QWidget()
         denoise_row.setLayout(QHBoxLayout())
         denoise_row.layout().setContentsMargins(0,0,0,0)
-        denoise_row.layout().addWidget(QLabel('Denoise Strength'))
+        self.denoise_label = QLabel('Denoise Strength')
+        self.denoise_label.setToolTip(DEFAULT_DENOISE_TOOLTIP)
+        denoise_row.layout().addWidget(self.denoise_label)
 
         # Denoise label
         default_noise = self.settings_controller.get('defaults.denoise_strength')

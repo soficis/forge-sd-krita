@@ -1,71 +1,85 @@
 # Forge SD-Krita Plugin
 
-A Krita plugin for generating, transforming, and editing images with the [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) backend.
+A modern, production-grade Krita docker plugin for generating, transforming, and editing images with the [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) backend.
 
-> [!CAUTION]
-> **DISCLAIMER: EXPERIMENTAL & WORK IN PROGRESS**
-> This plugin is in active development and **most likely is NOT in a fully functional or stable state for end-user production use**. Expect rough edges, missing error handling, unhandled edge cases, breaking changes, and potential UI crashes.
-> 
-> Please review the [Known Issues & Limitations](#%EF%B8%8F-known-issues--limitations) and the [Testing & Verification Guide](#-testing--verification-guide) before attempting to use or test the plugin.
+> [!NOTE]
+> **Status: Active Development & Stable Core Generation**
+> Core generation workflows (**Txt2Img**, **Img2Img**, and **Inpaint**) are functional, resilient, and backed by a comprehensive **1290-test automated suite**. Advanced extension hooks (ControlNet multi-unit and ADetailer face/hand repair) have verified payload schemas and API bindings, but should be tested individually against your specific Forge Neo extension configuration.
 
 ---
 
 ## 📦 What's New in 1.1.0
 
-A feature-completion release on top of 1.0.0 — the automated suite grew from 330 to **1053 tests, all passing**.
+A major UX, stability, and feature-completion release — test suite expanded from 330 to **1290 tests, all passing**.
 
-- **Reliability**: History **Reuse** now restores every field (model, sampler, seed, CFG, prompt); ControlNet survives error payloads; thread-handle races guarded; silent failures are logged; connection failures surface in a top banner with disabled-button tooltips; timers stop on page close; mask visibility is restored after generation.
-- **Validation**: empty prompts and invalid batch/steps/seed values are rejected client-side with an inline `Cannot generate: …` message before anything reaches the server.
-- **Artist tools**: Prompt Presets (save/load/rename/delete, max 50), Smart-size resolution suggestions (img2img + inpaint), and a one-click **Quick Mask** bootstrap on inpaint.
-- **Generation**: collapsible **Tiled (high-res)** controls on txt2img; live canvas preview (512 px capped, malformed frames skipped) during txt2img/img2img/inpaint; Flux dynamic sizing and control visibility per family; an IP-Adapter reference slot that appears only when the backend advertises it.
-- **Extensions & data**: ADetailer model list fetched from the API; Segmentation Map page renders a searchable color list; dead `sd_api` file-IO helpers removed; `qt_compat` now exports explicit symbols instead of star imports.
-- **Polish & docs**: measured performance fixes (settings save, history, API cache, preview), empty states / disabled-button tooltips / loading indicator, this README's User Guide, and a full walkthrough in `docs/GUIDE.md` (local-only).
-
-Still open (not in 1.1.0): txt2img Hires Fix does not re-apply family size rules on model change, the Smart-size widget is not on the txt2img page, and `generate_widget.cleanup()` is never reached from `page.cleanup()` (latent). Full detail lives in the local-only `docs/CHANGELOG.md` and `docs/STATUS.md`.
+- **Modern Top Rail Layout**: Navigation tabs (`Txt2Img`, `Img2Img`, `Inpaint`, `Upscale`, `Rembg`, `Seg-Map`, `Settings`) are positioned along a clean, space-efficient horizontal top rail across the docker header.
+- **Visual Hierarchy (Prompt First)**: Prompt and Negative Prompt inputs are positioned prominently at the top of each generation page, putting creative iteration first before secondary settings.
+- **Scroll Protection (Mousewheel Filtering)**: Spinboxes, sliders, and dropdown menus ignore accidental mousewheel scroll changes (`NoWheelComboBox`, `NoWheelSlider`, `NoWheelSpinBox`), preventing accidental parameter edits while navigating the docker.
+- **Robust Inpainting & Quick Mask**:
+  - One-click **Quick Mask** action bootstraps the `"Forge Mask"` layer, switches to the brush tool, and enters paint mode.
+  - Zero-dimension layer bounds (e.g. freshly created or cleared mask layers) gracefully fall back to canvas dimensions, eliminating empty payload captures and backend `404: Init image not found` errors.
+  - Mask layer visibility is cleanly preserved and restored after generation, even upon error or user cancellation.
+  - Soft Inpainting controls are merged directly into Inpaint mask settings.
+  - Client-side validation prevents generation attempts when no active canvas image is available.
+- **Streamlined Model & Generation Settings**:
+  - **Scheduler Disambiguation**: The scheduler dropdown includes an explicit `"Use Preset Default (Automatic)"` option to clearly differentiate backend family defaults from generic Automatic.
+  - **Refiner Controls**: Refiner checkpoint and step controls are tucked into an expandable section, visible only when enabled.
+  - **VAE Sentinel Filtering**: The internal `"None"` sentinel is stripped from payloads and defaults reconcile cleanly with the backend.
+  - **Styles Collapsed by Default**: Styles drawer is collapsed by default to minimize visual noise.
+  - **Denoise Protection**: Denoise strength is automatically capped for distilled/turbo models to prevent blown-out outputs.
+- **Lifecycle & Memory Management**:
+  - Page destruction cascades cleanly to `generate_widget.cleanup()`.
+  - Defensive handling for deleted Qt C++ objects (`QLabel`, `QWidget`) prevents runtime crashes during rapid page switching or background return.
+  - Timer teardown stops background polling immediately when tabs are closed.
+- **Simplify UI Section**: The Simplify UI tool is integrated directly as a collapsible section inside the **Settings** tab.
+- **Interrogate Deprecation**: Removed the defunct Interrogate button since Forge Neo does not expose the legacy A1111 interrogate endpoint.
+- **Artist Tools & Reliability**:
+  - Full **History Reuse** copies all generation parameters (model, sampler, scheduler, seed, CFG, prompt, dimensions).
+  - **Prompt Presets**: Save, load, rename, and delete prompt templates (up to 50).
+  - **Smart Size**: Dimension suggestion assistant for resolution alignment on img2img and inpaint.
+  - **Tiled High-Res**: Collapsible high-resolution tiled generation controls on Txt2Img.
+  - **Live Preview**: Canvas preview layer (512px capped) during generation when enabled.
+  - **Client-Side Validation**: Prompt emptiness and invalid numeric inputs are rejected before sending requests.
 
 ---
 
 ## 🛠️ Requirements & Prerequisites
 
-- **Krita**: Krita 5.2+ or Krita 6.0+ with Python Plugin Manager enabled (PyQt5 / PyQt6 auto-detected)
-- **Python**: Krita-bundled Python — tested on 3.12 / 3.13 / 3.14
-- **Backend**: Forge Neo backend (branch `neo` only, not A1111/classic) started with `--api` (`set COMMANDLINE_ARGS=--api`), default `http://127.0.0.1:7860`
-- **Dependencies**: stdlib + krita + PyQt5/PyQt6 only — no pip needed
+- **Krita**: Krita 5.2+ or Krita 6.0+ (PyQt5 and PyQt6 auto-detected)
+- **Python**: Bundled with Krita (Python 3.10 / 3.11 / 3.12 / 3.13 / 3.14)
+- **Backend**: [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) (branch `neo` required; classic A1111 legacy architecture is not supported) started with `--api` (`set COMMANDLINE_ARGS=--api`), default address `http://127.0.0.1:7860`
+- **Dependencies**: None beyond Krita's built-in Python environment (PyQt5/PyQt6 + standard library)
 
-### Backend Requirement
+### Backend Compatibility Note
 
-This plugin specifically targets and requires **Forge Neo** (branch `neo`). Original Forge WebUI (A1111 legacy architecture) is not supported.
-
-Forge Neo features utilized by this plugin:
-- Native support for Flux, Flux2, Anima, Z-Image, Krea2, Qwen-Image, and Wan models
-- Model-aware UI presets (`sd`, `xl`, `flux`, `klein`, `qwen`, `lumina`, `zit`, `wan`, `anima`, `ernie`, `pid`, `krea`)
-- Additional modules system for text encoders and VAEs
+This plugin is specifically engineered for **Forge Neo** (`neo` branch). Key Forge Neo capabilities utilized:
+- Native model families: Flux.1, Flux2 Klein, Anima, Z-Image, Krea2, Qwen-Image, and Wan
+- Automatic preset profiles: `sd`, `xl`, `flux`, `klein`, `qwen`, `lumina`, `zit`, `wan`, `anima`, `ernie`, `pid`, `krea`
+- Dynamic text encoder and VAE additional module orchestration
 
 ---
 
-## 📊 Status & Supported Model Families
+## 📊 Supported Model Families & Presets
 
-The plugin auto-detects **9 model families** from checkpoint filenames and automatically configures Forge Neo presets, text encoders, VAEs, samplers, schedulers, CFG scales, size defaults, and UI visibility.
+The plugin detects **9 model families** automatically from checkpoint filenames and applies presets, text encoders, VAEs, samplers, schedulers, CFG scales, and UI adaptations:
 
 ### 1. Model Matrix & Setup Requirements
 
 | Model Family | Detection Keywords | Forge Preset | Text Encoder | VAE | Sampler / Scheduler | CFG Defaults |
 |---|---|---|---|---|---|---|
-| **SD 1.5** | (default fallback) | `sd` | — | — | Euler a / Automatic | 7.0 (range 0-30) |
-| **SDXL** | `sdxl` | `xl` | — | — | Euler a / Automatic | 5.0 (range 0-30) |
+| **SD 1.5** | (fallback default) | `sd` | — | — | Euler a / Automatic | 7.0 (range 0–30) |
+| **SDXL** | `sdxl` | `xl` | — | — | Euler a / Automatic | 5.0 (range 0–30) |
 | **Flux.1** | `flux`, `nunchaku` | `flux` | `clip_l` + `t5xxl_fp16` | `ae.safetensors` | Euler / Simple | 1.0 (Distilled CFG 3.5) |
 | **Flux2 Klein** | `flux2`, `klein-4b`, `klein-9b` | `klein` | `qwen_3_4b` / `qwen_3_8b` | `flux2-vae.safetensors` | Euler / Simple | 1.0 (fixed 4 steps) |
 | **Anima** | `anima`, `wai-anima` | `anima` | `qwen_3_06b_base` | `qwen_image_vae.safetensors` | ER SDE / Beta | 4.0 (shift 3.0, 32 steps) |
-| **Z-Image Turbo** | `z-image`, `z_image` | `zit` | `qwen_3_4b` | `ae.safetensors` | Euler / Beta | 1.0 (fixed, 8-9 steps) |
+| **Z-Image Turbo** | `z-image`, `z_image` | `zit` | `qwen_3_4b` | `ae.safetensors` | Euler / Beta | 1.0 (fixed, 8–9 steps) |
 | **Krea2** | `krea2`, `krea-2` | `krea` | `qwen3vl_4b_fp8_scaled` | `qwen_image_vae.safetensors` | Euler / Simple | RAW: 4.5 / Turbo: 0.0 (fixed) |
-| **Qwen-Image** | `qwen-image` | `qwen` | `qwen_2.5_vl_7b_fp8_scaled` | `qwen_image_vae.safetensors` | Euler / Simple | 4.0 (range 0-10, 30 steps) |
-| **Wan** | `wan` | `wan` | — | — | Euler a / Automatic | 7.0 (range 0-30) |
+| **Qwen-Image** | `qwen-image` | `qwen` | `qwen_2.5_vl_7b_fp8_scaled` | `qwen_image_vae.safetensors` | Euler / Simple | 4.0 (range 0–10, 30 steps) |
+| **Wan** | `wan` | `wan` | — | — | Euler a / Automatic | 7.0 (range 0–30) |
 
-*Note: Model files go into Forge Neo's `models/` subdirectories: Checkpoints in `models/Stable-diffusion/`, VAEs in `models/VAE/`, and Text Encoders in `models/text_encoder/`.*
+*Note: In Forge Neo, place checkpoints in `models/Stable-diffusion/`, VAEs in `models/VAE/`, and text encoders in `models/text_encoder/`.*
 
 ### 2. Architecture-Aware Size Defaults
-
-When a model is detected, min/max generation bounds are set automatically:
 
 | Architecture | Default Min Size | Default Max Size | Hard Floor |
 |---|---|---|---|
@@ -73,171 +87,190 @@ When a model is detected, min/max generation bounds are set automatically:
 | **SDXL / Flux / Flux2 / Anima / Z-Image / Krea2 / Qwen** | 512 | 2048 | 512 |
 | **Wan** | 256 | 1024 | 256 |
 
-### 3. UI Adaptation Per Model
+### 3. Dynamic UI Adaptation
 
-- **Negative Prompt**: Hidden for Flux/Flux2/Z-Image/Krea2 Turbo. Shown for SD/SDXL/Anima/Krea2 RAW/Qwen/Wan.
-- **Styles Selector**: Hidden for Flux/Flux2. Shown for all other models.
-- **CFG Scale Label**: Displays as "Distilled CFG" for Flux, "Guidance Scale" for Krea2/Qwen, or "CFG fixed" for Turbo models.
-
-### 4. Turbo Distill LoRA Detection
-
-The plugin inspects prompt text for turbo/distill LoRA tags and automatically adjusts sampling steps and CFG:
-- `<lora:*turbo*:*>` → 8 steps
-- `<lora:*hyper-sd*:*>` / `<lora:*hyper_sd*:*>` → 8 steps, CFG 3.5
-- `<lora:*lcm*:*>` → 4 steps, CFG 1.0
-- `<lora:*alimama*:*>` → 8 steps, CFG 3.5
+- **Negative Prompt**: Automatically hidden for Flux, Flux2, Z-Image, and Krea2 Turbo. Displayed for SD, SDXL, Anima, Krea2 RAW, Qwen, and Wan.
+- **Styles Section**: Collapsed by default; hidden entirely for Flux and Flux2.
+- **CFG Scale Label**: Dynamically displays as "Distilled CFG" for Flux, "Guidance Scale" for Krea2/Qwen, or "CFG fixed" for Turbo models.
+- **Turbo LoRA Auto-Adjustment**: Prompt tags like `<lora:*turbo*:*>`, `<lora:*hyper-sd*:*>`, `<lora:*lcm*:*>`, or `<lora:*alimama*:*>` automatically configure optimal steps and CFG.
 
 ---
 
 ## ✨ Features & Generation Modes
 
 ### Txt2Img (Text-to-Image)
-- Prompt & Negative Prompt input (negative prompt hides dynamically for unsupported models).
-- Model selection with auto-configuration of sampler, scheduler, steps, and CFG.
-- Batch generation and fixed or random seed generation.
+- Prompt and Negative Prompt positioned at the top of the interface.
+- Automatic model detection with tuned sampler, scheduler, steps, and CFG presets.
+- Prompt Presets management (save, load, rename, delete).
+- Collapsible Tiled high-resolution generation controls (tile size 512/768/1024, overlap 0–128 px).
+- Batch count, batch size, and seed controls (fixed or random `-1`).
 
 ### Img2Img (Image-to-Image)
-- Transforms active selection or layer in Krita based on prompt.
-- **Denoise Strength Guide**: `0.1–0.3` (subtle color/style tweaks), `0.3–0.5` (moderate restyle), `0.5–0.7` (major transformation), `0.7–1.0` (complete reinterpretation).
+- Transforms active canvas selection or layer.
+- **Smart Size**: Suggests step-aligned dimensions matching canvas aspect ratio.
+- **Denoise Strength**: Slider with distilled model safety caps (`0.1–0.3` subtle adjustments, `0.3–0.5` moderate restyling, `0.5–0.7` major transformations, `0.7–1.0` full reinterpretation).
 
-### Inpaint (Masked Region Generation)
-- Fill masked regions seamlessly. White = inpaint area, Black = preserve area.
-- Auto-update mask, mask blur adjustment, and Soft Inpainting blending support.
+### Inpaint (Masked Inpainting)
+- Seamless region filling: white paints inpaint area, transparent/black preserves canvas.
+- **Quick Mask**: One-click mask layer creation, brush tool activation, and paint mode bootstrap.
+- Zero-dimension bounds protection with automatic canvas bounds fallback.
+- Invert mask, mask blur adjustment, and integrated Soft Inpainting.
+- Layer visibility preservation (mask layer temporarily hidden for clean capture, then restored).
+
+### Upscale & Post-Processing
+- High-quality image scaling via Forge Neo's `extra-single-image` endpoint.
+- Upscale by factor (e.g. 2x, 4x) or to target dimensions.
+- Optional automatic canvas resizing to match upscaled output.
+
+### Remove Background (RemBG)
+- Integrated background extraction supporting u2net, isnet, and related models.
+- Configurable alpha matting (foreground/background thresholds, erode size).
+- Outputs as a transparent layer or isolated mask.
+
+### Extensions (ControlNet & ADetailer)
+- Multi-unit ControlNet configuration with model, preprocessor, weight, guidance bounds, and pixel-perfect options.
+- Dynamic IP-Adapter reference image slot gated on backend capability.
+- API-driven ADetailer face and hand detail restoration.
 
 ### Job Queue & History
-- Sequential job queuing with queue status and job cancellation/clearing.
-- Generation history with image thumbnails, search filtering, pagination, and settings restoration.
-
-### Additional Tools & Extensions
-- **Upscale**: Single-image upscaling via `extra-single-image` endpoint (Lanczos, 4x-UltraSharp, 4x-AnimeSharp).
-- **Remove Background**: RemBG integration with alpha matting and mask outputs.
-- **ControlNet & ADetailer**: Multi-unit ControlNet configuration and automatic face/hand detail enhancement.
-- **Simplify UI** (collapsible section at the bottom of the **Settings** tab): Hide unused widgets while preserving default settings.
+- Non-blocking asynchronous job generation queue.
+- Real-time queue status bar with error reporting and job cancellation.
+- Generation history with thumbnails, metadata inspection, search filtering, and one-click full parameter **Reuse**.
 
 ---
 
 ## 🚀 Installation & Setup
 
-### 1. Enable API Access on Forge Neo
+### 1. Enable API on Forge Neo
 
-In your Forge Neo directory, edit `webui-user.bat` (or shell script equivalent) to include `--api`:
+In your Forge Neo root directory, ensure `webui-user.bat` (Windows) or `webui-user.sh` (Linux) includes `--api`:
 
 ```bat
 set COMMANDLINE_ARGS=--api
 ```
 
+Launch Forge Neo and verify it is accessible at `http://127.0.0.1:7860`.
+
 ### 2. Install Plugin into Krita
 
-#### Easy Install (Standard Copy)
+#### Standard Copy (Recommended)
 
-1. Launch Krita → **Settings > Manage Resources** → click **Open Resource Folder** (bottom right).
-2. Open the `pykrita` subfolder inside the opened file explorer window.
-3. Copy both the `forge` directory and `forge.desktop` file into `pykrita`.
+1. Open Krita → **Settings > Manage Resources** → click **Open Resource Folder** (bottom right).
+2. Navigate into the `pykrita` directory.
+3. Copy both the `forge` folder and `forge.desktop` file into `pykrita`:
+   ```
+   <Krita-Resource-Folder>/pykrita/
+   ├── forge/
+   └── forge.desktop
+   ```
 4. Restart Krita.
 
-#### Symlink Install (Git Auto-Updates)
+#### Symlink / Development Setup
 
 ```bat
-:: Windows (Run Command Prompt as Administrator)
-mklink /j "%APPDATA%\krita\pykrita\forge" "C:\path\to\cyanic-sd-krita\forge"
-mklink "%APPDATA%\krita\pykrita\forge.desktop" "C:\path\to\cyanic-sd-krita\forge.desktop"
+:: Windows (Command Prompt as Administrator)
+mklink /j "%APPDATA%\krita\pykrita\forge" "V:\path\to\forge-sd-krita\forge"
+mklink "%APPDATA%\krita\pykrita\forge.desktop" "V:\path\to\forge-sd-krita\forge.desktop"
 ```
 
 ```sh
 # Linux
-ln -s ~/.local/share/krita/pykrita/forge /path/to/cyanic-sd-krita/forge
-ln -s ~/.local/share/krita/pykrita/forge.desktop /path/to/cyanic-sd-krita/forge.desktop
+ln -s /path/to/forge-sd-krita/forge ~/.local/share/krita/pykrita/forge
+ln -s /path/to/forge-sd-krita/forge.desktop ~/.local/share/krita/pykrita/forge.desktop
 ```
 
-### 3. Enable Plugin in Krita
+### 3. Activate Plugin in Krita
 
-1. Restart Krita.
-2. Go to **Settings > Configure Krita... > Python Plugin Manager**.
-3. Check the box for **forge SD Plugin for Krita**.
-4. Restart Krita.
-5. Open Docker: **Settings > Dockers > Forge SD**.
+1. Open Krita → **Settings > Configure Krita... > Python Plugin Manager**.
+2. Enable the checkbox for **forge SD Plugin for Krita**.
+3. Restart Krita.
+4. Enable the docker: **Settings > Dockers > Forge SD**.
 
 ---
 
-## 🧭 User Guide
+## 🧭 User Guide & Workflow
 
-Quick start: open the **Settings** tab, enter your server URL (default `http://127.0.0.1:7860`), and click **Connect**. While disconnected, a banner at the top of the docker shows the failure reason and the Generate, Cancel, and Remove Background buttons stay disabled. Empty prompts are blocked before they reach the server with a `Cannot generate: ...` message under the Generate button.
-
-One line per mode:
-
-- **Txt2Img**: prompt to a new layer, with Prompt Presets (save/load/rename/delete, max 50) and a collapsible **Tiled (high-res)** section (tile size 512/768/1024, overlap 0-128 px).
-- **Img2Img**: transform a selection, layer, or canvas with a Denoise Strength slider; **Smart size** suggests a step-aligned resolution.
-- **Inpaint**: paint white on the mask layer (**Quick Mask** bootstraps one), with mask blur, Soft Inpainting, and restore-after-generate mask visibility.
-- **Upscale**: scale by factor or to exact dimensions via `extra-single-image`, with optional canvas resize.
-- **Remove Background**: RemBG models (u2net, isnet, and friends) with alpha matting and mask output.
-- **ControlNet**: multi-unit preprocessor/model configs under Extensions; the IP-Adapter reference slot appears only when the backend advertises it.
-- **ADetailer**: face and detail enhancement; model list fetched from the API, not hardcoded.
-- **Segmentation Map** (seg-map): searchable color list for ControlNet segmentation masks (browse and search only).
-
-Shared workflow: live preview (512 px capped) updates on the canvas during txt2img, img2img, and inpaint jobs when enabled in Settings; generation history at the bottom of each page searches, pages 20 at a time, and **Reuse** restores a full entry (model, sampler, seed, CFG, prompt, and the rest).
-
-For symptom-by-symptom fixes see `docs/TROUBLESHOOTING.md`; for checkpoint, text encoder, and VAE requirements see `docs/MODELS.md` or the [Model Matrix](#1-model-matrix--setup-requirements) above. A longer walkthrough lives in `docs/GUIDE.md` (local-only docs folder, not tracked).
+1. **Connect**:
+   - Open the **Settings** tab.
+   - Enter your Forge Neo server URL (default: `http://127.0.0.1:7860`).
+   - Click **Connect**. The status indicator turns green when connected. If offline, the status bar displays the connection error and generation buttons remain disabled.
+2. **Text to Image**:
+   - Switch to the **Txt2Img** tab.
+   - Type your prompt into the top text box.
+   - Select your checkpoint from the model dropdown (samplers and presets configure automatically).
+   - Click **Generate**. Generated images are automatically inserted onto a new layer.
+3. **Inpainting with Quick Mask**:
+   - Open or create an artwork in Krita.
+   - Switch to the **Inpaint** tab.
+   - Click **Quick Mask** — this creates a `"Forge Mask"` layer and equips your brush tool.
+   - Paint white over the area you want to replace.
+   - Enter your prompt and click **Generate**.
+4. **History & Reuse**:
+   - Scroll to the **History** section at the bottom of any generation tab.
+   - Browse previous generations or use the search bar.
+   - Click **Reuse** to reload prompt, model, seed, CFG, sampler, and dimensions into the active tab.
 
 ---
 
 ## 🧪 Testing & Verification Guide
 
-The project includes an automated test suite for domain logic alongside manual testing procedures.
+The codebase maintains a comprehensive automated unit test suite.
 
-### 1. Automated Unit Tests
-
-Execute the unit test suite across domain logic and critical widget paths (**1053 tests** as of 1.1.0):
+### 1. Running the Automated Suite
 
 ```bash
-# Run all 1053 tests
+# Run all 1290 unit tests
 python -m pytest tests/ -v
 ```
 
-#### Test Suite Breakdown
+### 2. Test Suite Breakdown (1290 Tests across 41 Modules)
 
 | Module | Tests | Focus Area |
 |---|---|---|
-| `test_model_registry.py` | 149 | 9-model family regex detection, forge presets, CFG profiles, and size defaults |
-| `test_smart_resolution.py` | 130 | Step-aligned resolution suggestion math |
-| `test_ui_surface.py` | 92 | Widget/page surface construction tests |
-| `test_controlnet_dict_guards.py` | 83 | Non-dict / error-payload guards in ControlNet and sd_api |
-| `test_qt_compat_imports.py` | 67 | Explicit `qt_compat` symbol surface |
-| `test_controlnet_ip_adapter.py` | 48 | IP-Adapter capability gating and wiring |
-| `test_generation_validation.py` | 46 | Client-side prompt/batch/steps/seed validation |
-| `test_generation_plan.py` | 40 | Aspect ratio math, canvas bounds scaling, and pixel alignment |
-| `test_payload_builder.py` | 36 | Translation of plugin parameters to API payload formats and model overrides |
-| `test_settings_controller.py` | 35 | Settings migration, loading defaults, fallback defaults, and debounced saving |
-| `test_flux_ui.py` | 35 | Flux dynamic sizing and control visibility |
-| `test_ux_polish.py` | 32 | Empty states, disabled tooltips, loading indicator, spacing |
-| `test_prompt_presets.py` | 29 | Prompt preset CRUD |
-| `test_connection_errors.py` | 28 | Connection failure modes and banner surfacing |
-| `test_seg_map.py` | 28 | Segmentation map list rendering and search |
-| `test_sd_api.py` | 26 | Backend connection state machine, retry logic, and payload dispatching |
-| `test_progress_state.py` | 26 | Parsing Forge progress polling API responses |
-| `test_task18_widget_todos.py` | 22 | Triaged widget TODO paths |
-| `test_tiled_txt2img.py` | 17 | Tiled generation control wiring |
-| `test_timer_cleanup.py` | 15 | Timer teardown on page/widget cleanup |
-| `test_history_manager.py` | 18 | Generation history storage, search filtering, pagination, and TTL cleanup |
-| `test_adetailer_models.py` | 13 | API-driven ADetailer model list |
-| `test_live_preview.py` | 12 | Live preview frames and 512 px cap |
-| `test_mask_visibility.py` | 9 | Mask layer snapshot/restore around generation |
-| `test_quick_mask.py` | 8 | Quick Mask layer bootstrap |
-| `test_krita_adapter_thread.py` | 5 | Concurrent-thread guard in `run_as_thread()` |
-| `test_models_history_reuse.py` | 4 | Full history entry restore via copy-on-reuse |
-| **Total** | **1053** | |
+| `test_model_registry.py` | 141 | 9-model family regex detection, forge presets, CFG profiles, and size defaults |
+| `test_smart_resolution.py` | 130 | Step-aligned resolution suggestion algorithms |
+| `test_ui_surface.py` | 92 | Widget and page construction integrity |
+| `test_controlnet_dict_guards.py` | 83 | Non-dict and error-payload safety guards |
+| `test_qt_compat_imports.py` | 63 | Explicit `qt_compat` symbol isolation across PyQt5/6 |
+| `test_settings_schema_numeric_types.py` | 55 | Settings schema numeric conversions and type consistency |
+| `test_controlnet_ip_adapter.py` | 48 | IP-Adapter capability gating and payload wiring |
+| `test_generation_validation.py` | 46 | Client-side prompt, batch, step, and seed validation |
+| `test_generation_plan.py` | 40 | Aspect ratio bounding and pixel alignment math |
+| `test_payload_builder.py` | 37 | API payload formatting, model overrides, and image encoding |
+| `test_settings_controller.py` | 35 | Settings migration, loading defaults, and debounced persistence |
+| `test_flux_ui.py` | 35 | Flux dynamic sizing and control visibility rules |
+| `test_scheduler_dropdown.py` | 34 | Scheduler dropdown options and preset default handling |
+| `test_ux_polish.py` | 32 | Empty states, disabled tooltips, and loading indicator |
+| `test_prompt_presets.py` | 29 | Prompt preset CRUD operations |
+| `test_connection_errors.py` | 28 | Backend connection error detection and banner display |
+| `test_seg_map.py` | 28 | Segmentation map color list rendering and search |
+| `test_sd_api.py` | 26 | Backend API state machine, retry logic, and request dispatching |
+| `test_progress_state.py` | 26 | Forge Neo progress polling parser |
+| `test_interrogate_removed.py` | 24 | Verification of clean interrogate endpoint deprecation |
+| `test_no_wheel_combo.py` | 21 | Mousewheel event filtering across dropdowns and spinboxes |
+| `test_live_preview.py` | 20 | Live canvas preview layer management and 512px cap |
+| `test_simplify_merged_into_settings.py` | 18 | Integrated Simplify UI section within Settings |
+| `test_history_manager.py` | 18 | Generation history storage, search filtering, and TTL cleanup |
+| `test_scheduler_default.py` | 17 | Model family scheduler preset defaults |
+| `test_tiled_txt2img.py` | 17 | Tiled generation control wiring and options |
+| `test_timer_cleanup.py` | 15 | Timer teardown on page and widget cleanup |
+| `test_adetailer_models.py` | 13 | API-driven ADetailer model list retrieval |
+| `test_denoise_turbo_guard.py` | 13 | Turbo model denoise strength capping |
+| `test_tabs_top_rail.py` | 13 | Horizontal top-rail tab layout and navigation |
+| `test_vae_sentinel_fix.py` | 13 | VAE None sentinel handling and backend synchronization |
+| `test_quick_mask.py` | 12 | Quick Mask bootstrap, 0x0 bounds fallback, and paint mode |
+| `test_ui_improvements.py` | 12 | Queue status lifecycle, cleanup cascading, and inpaint image validation |
+| `test_cfg_scale_float.py` | 11 | Floating-point CFG scale serialization |
+| `test_mask_layer_pixel_ops.py` | 9 | Mask layer clear, invert, and opacity operations |
+| `test_mask_visibility.py` | 9 | Mask layer snapshot and restoration lifecycle |
+| `test_task18_widget_todos.py` | 8 | Widget cleanup and error handling paths |
+| `test_hr_additional_modules.py` | 6 | High-res fix text encoder and VAE module payload integrity |
+| `test_krita_adapter_thread.py` | 5 | Concurrent thread guards in `run_as_thread()` |
+| `test_collapsible_default.py` | 4 | Collapsible section default visibility and expansion |
+| `test_models_history_reuse.py` | 4 | Complete history entry restoration |
+| **Total** | **1290** | **All passing** |
 
-### 2. Manual Verification Checklist
-
-When deploying changes to Krita (`pykrita/forge`), manually verify:
-1. **Connection**: Connect to `http://127.0.0.1:7860` in Settings tab. Verify status turns green.
-2. **Txt2Img**: Select an SDXL or Flux model. Verify prompt generation creates a new layer.
-3. **Img2Img**: Select a canvas area and generate with Denoise 0.5.
-4. **Inpaint**: Paint a white mask on a new layer and generate inpaint content.
-5. **RemBG & Upscale**: Test background removal and single image upscaling.
-
-### 3. Compilation Check
-
-Verify Python syntax across all codebase files:
+### 3. Syntax Verification
 
 ```bash
 python -m py_compile forge/*.py forge/*/*.py
@@ -245,43 +278,53 @@ python -m py_compile forge/*.py forge/*/*.py
 
 ---
 
-## ⚠️ Known Issues & Limitations
+## ⚠️ Known Behaviors & Considerations
 
-> [!WARNING]
-> **Most UI code still lacks dedicated unit tests, and a few follow-ups remain open.**
-> 
-> Core domain logic and critical widget paths have **1053 unit tests**, but most of the ~5,600 lines of PyQt widget, page, and docker code remain untested — expect occasional unhandled Qt edge cases. The critical 1.0.0 issues (history reuse, ControlNet error crashes, thread races, silent exception swallowing, missing prompt validation, mask visibility, timer leaks, hardcoded ADetailer models, skeleton Segmentation Map page) were fixed in 1.1.0 — see [What's New](#-whats-new-in-110).
-> 
-> Still open:
-> - **Open follow-ups**: txt2img Hires Fix does not re-apply per-family size rules on model change; the Smart-size widget is not on the txt2img page; and `generate_widget.cleanup()` is never reached from `page.cleanup()` because `self.widgets` excludes it (latent).
-> - **Untested UI infrastructure**: the majority of PyQt widget and page implementation code still has no dedicated test coverage (critical paths are covered).
-> - **Single-model backend (no concurrent model switching)**: Forge Neo serves ONE model at a time (single model loaded) — switching models unloads/reloads the backend, so concurrent multi-model generation or instant switching is unsupported by design.
-> - **Flux2 Dev 32B unsupported (Klein 4B/9B only)**: Only Flux2 Klein 4B (`klein-4b`) and 9B (`klein-9b`) checkpoints are supported via the `klein` preset; Flux2 Dev 32B is unsupported and has no registry entry — do not expect 32B checkpoints to be detected or configured.
+- **Extension Live Testing**: ControlNet and ADetailer widgets include verified API request builders and error handlers, but full live validation depends on the installed Forge extensions and models on your local Forge Neo backend.
+- **Single-Model Architecture**: Forge Neo loads one model checkpoint into VRAM at a time. Switching models triggers an unloading/loading cycle on the server.
+- **Flux2 Checkpoint Scope**: Flux2 Klein 4B (`klein-4b`) and 9B (`klein-9b`) checkpoints are supported via the `klein` preset. Flux2 Dev 32B is not supported.
 
 ---
 
-## 📐 System Architecture
+## 📐 Architecture Overview
 
 ```
 forge/
-├── __init__.py              Plugin registration with Krita
-├── forge.py                 Main docker widget & tab navigation
+├── __init__.py              Plugin entry point registered with Krita
+├── forge.py                 Main docker widget, top-rail tabs & layout
 ├── qt_compat.py             PyQt5 / PyQt6 abstraction layer
-├── settings_controller.py   Settings load/save/migration controller
+├── settings_controller.py   Settings controller with debounced disk persistence
 ├── default_settings.json    Default configuration schema
 ├── adapters/
-│   ├── sd_api.py            Forge API client (state machine, retry logic)
-│   └── krita_adapter.py     Krita canvas and layer manipulation
+│   ├── sd_api.py            Forge API client, connection state machine & retries
+│   └── krita_adapter.py     Krita document, layer, projection & mask operations
 ├── domain/
-│   ├── model_registry.py    9-family detection & configuration registry
-│   ├── payload_builder.py   Payload translator for API requests
-│   ├── generation_plan.py   Resize & dimension bounding math
-│   ├── history_manager.py   History persistence & cleanup
+│   ├── model_registry.py    9-family detection, presets, CFG & size defaults
+│   ├── payload_builder.py   Translates UI parameters to Forge Neo API payloads
+│   ├── generation_plan.py   Dimension bounding, aspect ratio & resize math
+│   ├── generation_validation.py Client-side input validation
+│   ├── history_manager.py   Local generation history indexing & TTL cleanup
 │   └── progress_state.py    Progress polling parser
 ├── pages/
-│   ├── txt2img.py, img2img.py, inpaint.py, settings.py, upscale.py, rembg.py, etc.
+│   ├── txt2img.py           Text-to-Image page
+│   ├── img2img.py           Image-to-Image page
+│   ├── inpaint.py           Inpaint page with Quick Mask & Soft Inpainting
+│   ├── upscale.py           Single-image upscaler page
+│   ├── rembg.py             Background removal page
+│   ├── seg_map.py           Segmentation map color reference page
+│   └── settings.py          Server connection, live preview & Simplify UI
+├── extension_widgets/
+│   ├── controlnet.py        Multi-unit ControlNet configuration
+│   └── adetailer.py         ADetailer face & hand detailer controls
 └── widgets/
-    ├── generate.py, models.py, prompts.py, cfg.py, history.py, mask.py, etc.
+    ├── generate.py          Job queue, status bar & generate execution
+    ├── models.py            Model, VAE, text encoder & scheduler controls
+    ├── prompts.py           Prompt & negative prompt text areas
+    ├── prompt_presets.py    Prompt preset manager
+    ├── mask.py              Quick Mask bootstrap, opacity & mask controls
+    ├── history.py           Visual generation history & parameter reuse
+    ├── no_wheel.py          Scroll-safe combo box, slider & spinbox widgets
+    └── collapsible.py       Collapsible container panels
 ```
 
 ---

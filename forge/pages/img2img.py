@@ -26,10 +26,9 @@ class Img2ImgPage(QWidget):
             self.layout().addWidget(self.denoise_widget)
 
         self.model_widget = ModelsWidget(self.settings_controller, self.api)
-        self.layout().addWidget(self.model_widget)
-
         self.prompt_widget = PromptWidget(self.settings_controller, self.api, 'img2img')
         self.layout().addWidget(self.prompt_widget)
+        self.layout().addWidget(self.model_widget)
 
         self.prompt_presets_widget = PromptPresetsWidget(self.settings_controller, self.prompt_widget)
         prompt_presets_collapsed = CollapsibleWidget('Prompt Presets', self.prompt_presets_widget)
@@ -91,7 +90,16 @@ class Img2ImgPage(QWidget):
 
     def cleanup(self) -> None:
         """Stop timer-owning children; safe on page switch or docker close."""
-        for child in list(getattr(self, "widgets", []) or []):
+        seen: set[int] = set()
+        children = list(getattr(self, "widgets", []) or [])
+        for name in ("generate_widget", "mask_widget", "history_widget"):
+            child = getattr(self, name, None)
+            if child is not None:
+                children.append(child)
+        for child in children:
+            if id(child) in seen:
+                continue
+            seen.add(id(child))
             candidate = getattr(child, "cleanup", None)
             if callable(candidate):
                 try:

@@ -161,6 +161,10 @@ def _stub_self(**overrides):
         _progress_timer_start=time.time(),
         _last_progress_change_time=time.time(),
         _last_progress_value=-1,
+        _disposed=False,
+        _run_error=None,
+        queue_status_label=MagicMock(),
+        _failure_message=lambda: "Generation failed: stub",
     )
     for key, value in overrides.items():
         setattr(stub, key, value)
@@ -325,3 +329,103 @@ class TestPreviewResolutionCap:
         GenerateWidget.progress_check(stub, 0, 0, 1024, 768, {})
 
         assert stub.kc.preview_calls == [(image, 0, 0, 1024, 768)]
+
+
+# ---------------------------------------------------------------------------
+# Generation finishing after the page was switched away (deleted QTimer)
+# ---------------------------------------------------------------------------
+
+class _DeadTimer:
+    """QTimer whose C++ object Qt already deleted with its parent widget."""
+
+    def stop(self):
+        raise RuntimeError(
+            "wrapped C/C++ object of type QTimer has been deleted"
+        )
+
+
+class TestFinishAfterPageDisposed:
+    def test_stop_loop_survives_a_deleted_timer(self):
+        stub = _stub_self(progress_timer=_DeadTimer())
+
+        GenerateWidget._stop_generation_loop(stub)  # must not raise
+
+        assert stub.progress_timer is None
+        assert stub.is_generating is False
+        assert stub.kc.delete_calls == 1
+
+    def test_stop_loop_when_disposed_touches_no_widget(self):
+        stub = _stub_self(progress_timer=_DeadTimer(), _disposed=True)
+
+        GenerateWidget._stop_generation_loop(stub)
+
+        assert stub.kc.delete_calls == 1
+        assert stub.is_generating is False
+        stub.update_progress_bar.assert_not_called()
+        stub._update_queue_status.assert_not_called()
+
+    def test_threadable_return_after_dispose_still_places_results(self):
+        stub = _bind_real(
+            _stub_self(results={"images": ["x"]}, progress_timer=_DeadTimer(),
+                       _disposed=True, job_queue=[object()]),
+            "_stop_generation_loop",
+        )
+        stub._start_next_job = MagicMock()
+
+        adapter = MagicMock()
+        with patch.object(generate_mod, "prune_generation_results",
+                          side_effect=lambda r: r),                 patch.object(generate_mod, "KritaAdapter", return_value=adapter):
+            GenerateWidget.threadable_return(stub, 0, 0, 64, 64, {})
+
+        adapter.results_to_layers.assert_called_once()
+        stub.history_manager.save_generation_async.assert_called_once()
+        stub._start_next_job.assert_not_called()
+        stub.generate_btn.setText.assert_not_called()
+        stub.update.assert_not_called()
+
+    def test_cleanup_marks_the_widget_disposed(self):
+        stub = _stub_self(progress_timer=_DeadTimer())
+
+        GenerateWidget.cleanup(stub)  # deleted timer must not raise
+
+        assert stub._disposed is True
+
+
+# ---------------------------------------------------------------------------
+# Failed generations must be visible (worker errors have no listener)
+# ---------------------------------------------------------------------------
+
+class TestFailureIsVisible:
+    def _stub(self, **kw):
+        stub = _bind_real(_stub_self(**kw), "_stop_generation_loop")
+        stub._failure_message = lambda: GenerateWidget._failure_message(stub)
+        return stub
+
+    def test_recorded_exception_reaches_the_status_line(self):
+        stub = self._stub(results=None, _run_error=ValueError("bad mask"))
+        GenerateWidget.threadable_return(stub, 0, 0, 64, 64, {})
+        stub.queue_status_label.setText.assert_called_with(
+            "Generation failed: ValueError: bad mask"
+        )
+
+    def test_no_result_without_exception_reports_the_api_error(self):
+        stub = self._stub(results=None)
+        stub.api.last_error_message = "Backend error (HTTP 500)"
+        GenerateWidget.threadable_return(stub, 0, 0, 64, 64, {})
+        stub.queue_status_label.setText.assert_called_with(
+            "Generation failed: Backend error (HTTP 500)"
+        )
+
+    def test_user_cancel_is_not_reported_as_a_failure(self):
+        stub = self._stub(results=None, abort=True)
+        GenerateWidget.threadable_return(stub, 0, 0, 64, 64, {})
+        for call in stub.queue_status_label.setText.call_args_list:
+            assert "Generation failed" not in call.args[0]
+
+    def test_threadable_run_records_instead_of_raising(self):
+        stub = _stub_self(
+            mode="upscale", results=None,
+            GENERATION_ENDPOINT_BY_MODE=GenerateWidget.GENERATION_ENDPOINT_BY_MODE,
+        )
+        GenerateWidget.threadable_run(stub, {})
+        assert isinstance(stub._run_error, RuntimeError)

@@ -3,7 +3,33 @@ from __future__ import annotations
 import logging
 import threading
 
+from pathlib import Path
+
 from krita import DockWidgetFactory, DockWidgetFactoryBase, Krita
+
+
+def _enable_file_log() -> None:
+    """Krita shows no plugin logging; keep a small log file beside the plugin."""
+    try:
+        from logging.handlers import RotatingFileHandler
+
+        handler = RotatingFileHandler(
+            Path(__file__).resolve().parent / "forge_debug.log",
+            maxBytes=512 * 1024,
+            backupCount=1,
+            encoding="utf-8",
+        )
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+        )
+        root = logging.getLogger("forge")
+        root.setLevel(logging.INFO)
+        root.addHandler(handler)
+    except Exception:
+        pass  # diagnostics must never stop the plugin loading
+
+
+_enable_file_log()
 
 from .forge import ForgeDocker
 from .version import __version__

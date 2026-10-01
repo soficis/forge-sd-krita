@@ -245,10 +245,14 @@ class SDAPI:
                 except urllib.error.HTTPError as exc:
                     last_error = exc
                     self.last_error = exc
+                    detail = _http_error_detail(exc)
                     self.last_error_message = _describe_request_error(exc, url)
+                    if detail:
+                        self.last_error_message += " Backend said: %s" % detail
                     logger.warning(
-                        "HTTP %d from %s (attempt %d/%d)",
+                        "HTTP %d from %s (attempt %d/%d)%s",
                         exc.code, url, attempt + 1, max_attempts,
+                        (": %s" % detail) if detail else "",
                     )
                     if exc.code < 500:
                         self.state = ConnectionState.ERROR
@@ -1041,6 +1045,21 @@ class SDAPI:
 
         painter.end()
         return result
+
+
+def _http_error_detail(exc: urllib.error.HTTPError, limit: int = 500) -> str:
+    """The backend's own explanation, e.g. FastAPI's {"detail": ...} body."""
+    try:
+        raw = exc.read(limit * 4).decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            raw = str(parsed.get("detail") or parsed.get("error") or parsed)
+    except (TypeError, ValueError):
+        pass
+    return " ".join(raw.split())[:limit]
 
 
 def _describe_request_error(exc: BaseException, url: str) -> str:

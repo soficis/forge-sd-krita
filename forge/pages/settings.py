@@ -284,13 +284,29 @@ class SettingsPage(QWidget):
         self.layout().addWidget(version_group)
 
     def _simplify_group(self) -> None:
-        # The former "Simplify UI" tab, folded in as a section. Starts
-        # collapsed so the connection/server controls stay on top.
-        simplify = SimplifyPage(self.settings_controller, self.api)
-        section = CollapsibleWidget("Simplify UI", simplify)
-        section.toggle_label.setChecked(False)
-        section.toggle()
+        # The former "Simplify UI" tab, folded in as a section. It starts
+        # collapsed and is only built on first expansion: building it
+        # constructs a ModelsWidget and probes the backend, which has no
+        # business running on every visit to the connection page.
+        self._simplify_holder = QWidget()
+        self._simplify_holder.setLayout(QVBoxLayout())
+        self._simplify_holder.layout().setContentsMargins(0, 0, 0, 0)
+        self._simplify_page = None
+        section = CollapsibleWidget("Simplify UI", self._simplify_holder)
+        section.toggle_label.clicked.connect(
+            lambda checked: self._build_simplify() if checked else None
+        )
         self.layout().addWidget(section)
+
+    def _build_simplify(self) -> None:
+        """(Re)build the Simplify page from current backend state."""
+        if self._simplify_page is not None:
+            # deleteLater drops it from the layout once the event loop runs;
+            # hide now so the stale and fresh pages are never both visible.
+            self._simplify_page.hide()
+            self._simplify_page.deleteLater()
+        self._simplify_page = SimplifyPage(self.settings_controller, self.api)
+        self._simplify_holder.layout().addWidget(self._simplify_page)
 
     def _check_updates(self) -> None:
         self._update_btn.setEnabled(False)
@@ -400,6 +416,9 @@ class SettingsPage(QWidget):
             self.api.change_host(host)
             self.settings_controller.set("server.host", host)
             self.settings_controller.save()
+            if self._simplify_page is not None:
+                # Its dropdowns and server_supported flags predate this host.
+                self._build_simplify()
 
         self._worker = None
 

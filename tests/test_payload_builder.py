@@ -76,6 +76,11 @@ class TestBasicTransformations:
         assert result["init_images"] == ["INPAINT_B64"]
         assert "inpaint_img" not in result
 
+    def test_empty_inpaint_img_omitted(self):
+        result = build_api_payload({"inpaint_img": ""})
+        assert "init_images" not in result
+        assert "inpaint_img" not in result
+
     def test_renames_mask_img(self):
         result = build_api_payload({"mask_img": "MASKDATA"})
         assert result["mask"] == "MASKDATA"

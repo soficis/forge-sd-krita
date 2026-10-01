@@ -428,10 +428,13 @@ class TestQueueLogic:
         generate_mod.GenerateWidget.threadable_run(stub, {"prompt": "x"})
         assert len(stub.api.txt2img) == 1
 
-    def test_threadable_run_unsupported_mode_raises(self):
+    def test_threadable_run_unsupported_mode_is_recorded_not_raised(self):
+        # The worker's error signal has no listener, so raising would vanish.
         stub = _gen_self(api=SimpleNamespace(), results=None, mode="upscale")
-        with pytest.raises(RuntimeError, match="Unsupported generation mode"):
-            generate_mod.GenerateWidget.threadable_run(stub, {})
+        stub._run_error = None
+        generate_mod.GenerateWidget.threadable_run(stub, {})
+        assert isinstance(stub._run_error, RuntimeError)
+        assert "Unsupported generation mode" in str(stub._run_error)
 
     def test_generate_enqueues_and_starts_when_idle(self):
         started = _Recorder()
@@ -502,7 +505,7 @@ class TestQueueLogic:
             generate_btn=_FakeButton(), progress_bar=_FakeBar(),
             queue_status_label=_FakeLabel(), clear_queue_btn=_FakeButton(),
             kc=SimpleNamespace(delete_preview_layer=lambda: None),
-            progress_timer=None, is_generating=True,
+            progress_timer=None, is_generating=True, _disposed=False, _run_error=None,
             list_of_widgets=[], update=lambda: None,
             update_progress_bar=lambda v: None,
             _restore_hidden_layers=lambda: None,

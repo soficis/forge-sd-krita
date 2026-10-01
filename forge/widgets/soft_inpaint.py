@@ -3,7 +3,6 @@ from ..qt_compat import (
     QWidget, Qt,
 )
 from ..settings_controller import SettingsController
-from . import CollapsibleWidget
 
 class SoftInpaintWidget(QWidget):
     def __init__(self, settings_controller:SettingsController, settings_only=False):
@@ -76,8 +75,9 @@ class SoftInpaintWidget(QWidget):
             self.layout().addWidget(self.settings_widget)
         else:
             self.layout().addWidget(soft_inpainting_enabled)
-            settings_collapsible = CollapsibleWidget('Soft Inpaint Settings', self.settings_widget) # Collapsible settings 
-            self.layout().addWidget(settings_collapsible)
+            if hasattr(self.settings_widget, 'setVisible'):
+                self.settings_widget.setVisible(bool(self.enabled))
+            self.layout().addWidget(self.settings_widget)
 
     def create_row(self, variable_name):
         # Pull constants from variable_parameters
@@ -105,6 +105,9 @@ class SoftInpaintWidget(QWidget):
     def update_enabled(self, enable):
         self.enabled = enable
         self.settings_controller.set('soft_inpaint.enabled', enable)
+        if hasattr(self, 'settings_widget') and not self.settings_only:
+            if hasattr(self.settings_widget, 'setVisible'):
+                self.settings_widget.setVisible(bool(enable))
 
     def update_row(self, label, variable_name, value):
         self.variables[variable_name] = value

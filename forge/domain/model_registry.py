@@ -25,7 +25,6 @@ class ModelConfig:
     family: ModelFamily
     forge_preset: str
     default_sampler: str
-    default_scheduler: str
     default_steps: int
     default_cfg: float
     hide_negative_prompt: bool
@@ -83,7 +82,6 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         family=ModelFamily.SD,
         forge_preset="sd",
         default_sampler="Euler a",
-        default_scheduler="Automatic",
         default_steps=20,
         default_cfg=7.0,
         hide_negative_prompt=False,
@@ -96,7 +94,6 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         family=ModelFamily.SDXL,
         forge_preset="xl",
         default_sampler="Euler a",
-        default_scheduler="Automatic",
         default_steps=20,
         default_cfg=5.0,
         hide_negative_prompt=False,
@@ -109,7 +106,6 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         family=ModelFamily.FLUX,
         forge_preset="flux",
         default_sampler="Euler",
-        default_scheduler="Simple",
         default_steps=20,
         default_cfg=1.0,
         hide_negative_prompt=True,
@@ -127,7 +123,6 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         family=ModelFamily.FLUX2,
         forge_preset="klein",
         default_sampler="Euler",
-        default_scheduler="Simple",
         default_steps=4,
         default_cfg=1.0,
         hide_negative_prompt=True,
@@ -144,7 +139,6 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         family=ModelFamily.ANIMA,
         forge_preset="anima",
         default_sampler="ER SDE",
-        default_scheduler="Beta",
         default_steps=32,
         default_cfg=4.0,
         hide_negative_prompt=False,
@@ -160,7 +154,6 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         family=ModelFamily.ZIMAGE,
         forge_preset="zit",
         default_sampler="Euler",
-        default_scheduler="Beta",
         default_steps=9,
         default_cfg=1.0,
         hide_negative_prompt=True,
@@ -179,7 +172,6 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         family=ModelFamily.KREA2,
         forge_preset="krea",
         default_sampler="Euler",
-        default_scheduler="Simple",
         default_steps=28,
         default_cfg=4.5,
         hide_negative_prompt=False,
@@ -195,7 +187,6 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         family=ModelFamily.QWEN_IMAGE,
         forge_preset="qwen",
         default_sampler="Euler",
-        default_scheduler="Simple",
         default_steps=30,
         default_cfg=4.0,
         hide_negative_prompt=False,
@@ -210,7 +201,6 @@ CONFIGS: dict[ModelFamily, ModelConfig] = {
         family=ModelFamily.WAN,
         forge_preset="wan",
         default_sampler="Euler a",
-        default_scheduler="Automatic",
         default_steps=20,
         default_cfg=7.0,
         hide_negative_prompt=False,

@@ -66,6 +66,8 @@ def _rename_key(
 
     value = payload.pop(source_key)
     if wrap_as_list:
+        if not value:
+            return
         value = [value]
     payload[target_key] = value
 

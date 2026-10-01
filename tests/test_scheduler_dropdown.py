@@ -10,7 +10,7 @@ provably wrong for FLUX (plugin sent ``Simple``; the backend preset is
 
 Contract locked here:
 
-* the default / sentinel entry ("Automatic (backend default)") produces
+* the default / sentinel entry ("Default (per model)") produces
   generation data AND payload with NO ``scheduler`` key at all
 * a user-picked backend label reaches the payload as exactly that label,
   passed through verbatim (payload_builder needs no change for this)
@@ -44,7 +44,7 @@ PKG = "scheddrop"
 
 # The sentinel entry, pinned here as the spec states it: its text is NOT one
 # of the backend's 17 scheduler labels, so it can never be sent as a value.
-SENTINEL = "Automatic (backend default)"
+SENTINEL = "Default (per model)"
 SCHEDULER_LABELS = ["Automatic", "Karras", "Exponential", "Beta"]
 
 
@@ -89,6 +89,12 @@ class _Widget:
 
     def setToolTip(self, text):
         self._tooltip = text
+
+    def setVisible(self, visible):
+        self._visible = bool(visible)
+
+    def isVisible(self):
+        return getattr(self, "_visible", True)
 
 
 class _Layout:
@@ -156,9 +162,12 @@ class _CheckBox(_Widget):
         super().__init__(*args, **kwargs)
         self._checked = False
         self.stateChanged = _Signal()
+        self.toggled = _Signal()
 
     def setChecked(self, value):
         self._checked = bool(value)
+        self.stateChanged.emit(self._checked)
+        self.toggled.emit(self._checked)
 
     def isChecked(self):
         return self._checked
@@ -285,6 +294,7 @@ def _make_widget(
     hide_scheduler=False,
     api_scheduler_default="",
     schedulers=SCHEDULER_LABELS,
+    offline=False,
 ):
     settings = MagicMock()
     defaults = {
@@ -316,7 +326,23 @@ def _make_widget(
         list(schedulers),
         api_scheduler_default,
     )
+    if offline:
+        # What SDAPI returns while disconnected: empty lists, "None" defaults.
+        api.get_models_and_default.return_value = ([], "None")
+        api.get_vaes_and_default.return_value = ([], "None")
+        api.get_samplers_and_default.return_value = ([], "None")
+        api.get_schedulers_and_default.return_value = ([], "")
     return ModelsWidget(settings, api), settings, api
+
+
+def _stored(settings, key):
+    """Last value written to ``key`` through settings.set, else None."""
+    writes = [c.args[1] for c in settings.set.call_args_list if c.args[0] == key]
+    return writes[-1] if writes else None
+
+
+def _wrote(settings, key):
+    return any(c.args[0] == key for c in settings.set.call_args_list)
 
 
 def _pick(widget, label):
@@ -374,7 +400,7 @@ class TestBackendDefaultSendsNoKey:
         assert "scheduler" not in payload
 
     def test_sentinel_entry_is_not_a_backend_label(self):
-        # "Automatic (backend default)" must never collide with the real
+        # "Default (per model)" must never collide with the real
         # "Automatic" label: for FLUX the backend default is Beta, so an
         # accidental "Automatic" would override the preset.
         assert SENTINEL not in SCHEDULER_LABELS
@@ -571,3 +597,66 @@ class TestHideUiGate:
         widget.set_generation_data({"scheduler": "Beta"})
         assert widget.variables["scheduler"] == "Beta"
         assert widget.get_generation_data()["scheduler"] == "Beta"
+
+
+# ---------------------------------------------------------------------------
+# 7. Storage form: "" for backend-owned, never the UI label (grime-struct-9fa)
+# ---------------------------------------------------------------------------
+
+
+class TestStoredForm:
+    def test_sentinel_is_stored_as_empty_string(self):
+        widget, settings, _ = _make_widget()
+        widget.save_settings()
+        assert _stored(settings, "defaults.scheduler") == ""
+
+    def test_real_label_is_stored_verbatim(self):
+        widget, settings, _ = _make_widget()
+        _pick(widget, "Karras")
+        widget.save_settings()
+        assert _stored(settings, "defaults.scheduler") == "Karras"
+
+    def test_previously_stored_label_is_migrated_to_empty_string(self):
+        widget, settings, _ = _make_widget(settings_scheduler=SENTINEL)
+        widget.save_settings()
+        assert _stored(settings, "defaults.scheduler") == ""
+
+    def test_building_the_widget_writes_nothing_to_settings(self):
+        _, settings, _ = _make_widget()
+        assert not _wrote(settings, "defaults.scheduler")
+        assert not _wrote(settings, "defaults.sampler")
+        assert not _wrote(settings, "defaults.vae")
+
+
+# ---------------------------------------------------------------------------
+# 8. Offline build/save must not clobber saved choices (grime-res-7qd)
+# ---------------------------------------------------------------------------
+
+
+class TestOfflineDoesNotClobber:
+    def test_offline_build_writes_no_defaults(self):
+        _, settings, _ = _make_widget(
+            settings_scheduler="Karras", offline=True
+        )
+        for key in ("model", "vae", "sampler", "scheduler"):
+            assert not _wrote(settings, "defaults." + key), key
+
+    def test_offline_save_keeps_saved_model_vae_sampler_scheduler(self):
+        widget, settings, _ = _make_widget(
+            settings_scheduler="Karras", offline=True
+        )
+        widget.save_settings()
+        for key in ("model", "vae", "sampler", "scheduler"):
+            assert not _wrote(settings, "defaults." + key), key
+
+    def test_offline_generation_data_does_not_clobber_either(self):
+        widget, settings, _ = _make_widget(offline=True)
+        widget.get_generation_data()
+        assert not _wrote(settings, "defaults.scheduler")
+
+    def test_online_save_still_writes_all_four(self):
+        widget, settings, _ = _make_widget()
+        widget.save_settings()
+        assert _stored(settings, "defaults.model") == "model.safetensors"
+        assert _stored(settings, "defaults.sampler") == "Euler a"
+        assert _wrote(settings, "defaults.scheduler")

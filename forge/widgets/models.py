@@ -11,7 +11,7 @@ MODELS_LOADING_TEXT = "Loading models..."
 MODELS_DISCONNECTED_TEXT = "Not connected - open Settings to connect"
 MODELS_EMPTY_TEXT = "No models found on the backend"
 
-SCHEDULER_BACKEND_DEFAULT_LABEL = "Automatic (backend default)"
+SCHEDULER_BACKEND_DEFAULT_LABEL = "Default (per model)"
 
 
 def is_selectable_scheduler(value, schedulers) -> bool:
@@ -21,6 +21,14 @@ def is_selectable_scheduler(value, schedulers) -> bool:
     apply its own per-preset default" and must never reach the payload.
     """
     return isinstance(value, str) and bool(value) and value in schedulers
+
+
+def scheduler_to_stored(value, schedulers) -> str:
+    """Config form of the scheduler: a backend label, or '' for backend-owned.
+
+    The dropdown sentinel is UI text and never belongs in user_settings.json.
+    """
+    return value if is_selectable_scheduler(value, schedulers) else ""
 
 
 def models_status_message(loading: bool, connected: bool, model_count: int) -> str:
@@ -144,7 +152,8 @@ class ModelsWidget(QWidget):
 
         # Send the changed model to settings. It'll get saved when the generate button is clicked
         self.model_box.currentTextChanged.connect(lambda: self._update_variables('model', self.model_box.currentText()))
-        self.model_box.setToolTip('SD Model')
+        self.model_box.currentTextChanged.connect(lambda text: self.model_box.setToolTip(text if text else 'SD Model'))
+        self.model_box.setToolTip(self.variables['model'] if self.variables['model'] else 'SD Model')
 
         if self.ignore_hidden or not self.settings_controller.get('hide_ui.model'):
             select_form.layout().addRow('Model', self.model_box)
@@ -165,8 +174,6 @@ class ModelsWidget(QWidget):
         settings_vae = self.settings_controller.get('defaults.vae')
         if len(settings_vae) > 0 and settings_vae in self.vaes:
             self.vae_box.setCurrentText(settings_vae)
-        else:
-            self.settings_controller.set('defaults.vae', self.variables['vae'])
         # Send the changed model to settings. It'll get saved when the generate button is clicked
         self.vae_box.currentTextChanged.connect(lambda: self._update_variables('vae', self.vae_box.currentText()))
         self.vae_box.setToolTip('VAE')
@@ -207,10 +214,24 @@ class ModelsWidget(QWidget):
         self.refiner_start_label.setText('%s%%' % int(self.variables['refiner_start'] * 100))
         refiner_start.layout().addWidget(self.refiner_start_label)
 
+        self.refiner_container = QWidget()
+        self.refiner_container.setLayout(QFormLayout())
+        self.refiner_container.layout().setContentsMargins(0, 0, 0, 0)
+        self.refiner_container.layout().addRow('Refiner', self.refiner_box)
+        self.refiner_container.layout().addRow('Refiner start', refiner_start)
+
+        # Wire visibility to checkbox and apply initial state
+        initial_refiner_enabled = bool(self.variables['enable_refiner'])
+        if hasattr(self.refiner_container, 'setVisible'):
+            self.refiner_container.setVisible(initial_refiner_enabled)
+        if hasattr(self.refiner_enable, 'toggled'):
+            self.refiner_enable.toggled.connect(self._on_refiner_toggled)
+        elif hasattr(self.refiner_enable, 'stateChanged'):
+            self.refiner_enable.stateChanged.connect(lambda: self._on_refiner_toggled(self.refiner_enable.isChecked()))
+
         if self.ignore_hidden or not self.settings_controller.get('hide_ui.refiner'):
             select_form.layout().addRow('Enable Refiner', self.refiner_enable)
-            select_form.layout().addRow('Refiner', self.refiner_box)
-            select_form.layout().addRow('Refiner start %', refiner_start)
+            select_form.layout().addRow(self.refiner_container)
         
         # Sampler and Steps
         if self.ignore_hidden or not self.settings_controller.get('hide_ui.sampler'):
@@ -221,6 +242,12 @@ class ModelsWidget(QWidget):
             select_form.layout().addRow('Scheduler', self._scheduler_settings())
 
         self.layout().addWidget(select_form)
+
+    def _on_refiner_toggled(self, checked: bool) -> None:
+        self._update_variables('enable_refiner', checked)
+        container = getattr(self, 'refiner_container', None)
+        if container is not None and hasattr(container, 'setVisible'):
+            container.setVisible(checked)
 
     def update_slider(self, value):
         if value == 0:
@@ -244,8 +271,6 @@ class ModelsWidget(QWidget):
         settings_sampler = self.settings_controller.get('defaults.sampler')
         if len(settings_sampler) > 0 and settings_sampler in self.samplers:
             self.sampler_box.setCurrentIndex(self.samplers.index(settings_sampler))
-        else:
-            self.settings_controller.set('defaults.sampler', self.variables['sampler'])
         # Send the changed sampler to the settings. It'll get saved when the generate button is clicked
         self.sampler_box.currentTextChanged.connect(lambda: self._update_variables('sampler', self.sampler_box.currentText()))
         self.sampler_box.setToolTip('Sampling method')
@@ -273,11 +298,9 @@ class ModelsWidget(QWidget):
         settings_scheduler = self.settings_controller.get('defaults.scheduler')
         if settings_scheduler is not None and len(settings_scheduler) > 0 and settings_scheduler in self.schedulers:
             self.scheduler_box.setCurrentText(settings_scheduler)
-        else:
-            self.settings_controller.set('defaults.scheduler', self.variables['scheduler'])
         # Send the changed scheduler to the settings. It'll get saved when the generate button is clicked
         self.scheduler_box.currentTextChanged.connect(lambda: self._update_variables('scheduler', self.scheduler_box.currentText()))
-        self.scheduler_box.setToolTip('Schedule type')
+        self.scheduler_box.setToolTip("Use the scheduler Forge picks for the loaded model.")
         return self.scheduler_box
     
     def _update_variables(self, key, value):
@@ -378,6 +401,12 @@ class ModelsWidget(QWidget):
                     check.setChecked(enable_refiner)
                 except AttributeError:
                     pass
+            container = getattr(self, 'refiner_container', None)
+            if container is not None and hasattr(container, 'setVisible'):
+                try:
+                    container.setVisible(enable_refiner)
+                except Exception:
+                    pass
         refiner_name = data.get("refiner")
         if refiner_name and isinstance(refiner_name, str):
             self._update_variables('refiner', copy.deepcopy(refiner_name))
@@ -410,10 +439,20 @@ class ModelsWidget(QWidget):
                         pass
 
     def save_settings(self):
-        self.settings_controller.set('defaults.model', self.variables['model'])
-        self.settings_controller.set('defaults.vae', self.variables['vae'])
-        self.settings_controller.set('defaults.sampler', self.variables['sampler'])
-        self.settings_controller.set('defaults.scheduler', self.variables.get('scheduler', ''))
+        # Building or saving this widget while offline must not overwrite the
+        # stored choices with the empty-list fallbacks, so each dropdown's
+        # default is written only when its options were actually loaded.
+        if self.models:
+            self.settings_controller.set('defaults.model', self.variables['model'])
+        if self.vaes not in ([], ['None']):
+            self.settings_controller.set('defaults.vae', self.variables['vae'])
+        if self.samplers:
+            self.settings_controller.set('defaults.sampler', self.variables['sampler'])
+        if self.schedulers:
+            self.settings_controller.set(
+                'defaults.scheduler',
+                scheduler_to_stored(self.variables.get('scheduler'), self.schedulers),
+            )
         self.settings_controller.set('defaults.sampling_steps', self.variables['sampling_steps'])
         self.settings_controller.set('defaults.enable_refiner', self.variables['enable_refiner'])
         self.settings_controller.set('defaults.refiner', self.variables['refiner'])

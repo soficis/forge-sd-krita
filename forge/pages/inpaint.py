@@ -21,6 +21,7 @@ class InpaintPage(QWidget):
             # This is an alwayson script, supported in Forge/A1111 v1.8+
             self.soft_inpaint_widget = SoftInpaintWidget(self.settings_controller)
             self.layout().addWidget(self.soft_inpaint_widget)
+            self.layout().addSpacing(8)
 
         self.color_correction = ColorCorrectionWidget(self.settings_controller, self.api)
         if not self.settings_controller.get('hide_ui.color_correction'):
@@ -31,10 +32,9 @@ class InpaintPage(QWidget):
             self.layout().addWidget(self.denoise_widget)
 
         self.model_widget = ModelsWidget(self.settings_controller, self.api)
-        self.layout().addWidget(self.model_widget)
-
         self.prompt_widget = PromptWidget(self.settings_controller, self.api, 'inpaint')
         self.layout().addWidget(self.prompt_widget)
+        self.layout().addWidget(self.model_widget)
 
         self.batch_widget = BatchWidget(self.settings_controller, self.api)
         if not self.settings_controller.get('hide_ui.batch'):
@@ -101,7 +101,16 @@ class InpaintPage(QWidget):
 
     def cleanup(self) -> None:
         """Stop timer-owning children; safe on page switch or docker close."""
-        for child in list(getattr(self, "widgets", []) or []):
+        seen: set[int] = set()
+        children = list(getattr(self, "widgets", []) or [])
+        for name in ("generate_widget", "mask_widget", "history_widget"):
+            child = getattr(self, name, None)
+            if child is not None:
+                children.append(child)
+        for child in children:
+            if id(child) in seen:
+                continue
+            seen.add(id(child))
             candidate = getattr(child, "cleanup", None)
             if callable(candidate):
                 try:
